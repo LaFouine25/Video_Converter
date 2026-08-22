@@ -18,6 +18,7 @@ import os
 import sys
 import json
 import time
+import shutil
 import subprocess
 import logging
 from pathlib import Path
@@ -50,6 +51,9 @@ FFMPEG_HEVC_PARAMS = [
 
 # Seuil de réduction de taille (10%)
 SIZE_REDUCTION_THRESHOLD = 0.10
+
+# Seuil minimal d'espace disque disponible (10%)
+MIN_DISK_SPACE_THRESHOLD = 0.10
 
 
 @dataclass
@@ -98,6 +102,25 @@ class VideoConverter:
         
     def _setup_logging(self) -> None:
         """Configure la journalisation."""
+
+    def _check_disk_space(self) -> bool:
+        """Vérifie si l'espace disque disponible est suffisant."""
+        try:
+            # Obtenir l'espace disque total et disponible
+            total, used, free = shutil.disk_usage("/")
+            free_percent = free / total
+            
+            if free_percent < MIN_DISK_SPACE_THRESHOLD:
+                self.logger.warning(
+                    f"Espace disque faible ({free_percent*100:.2f}% libre). "
+                    f"Désactivation des backups pour économiser de l'espace."
+                )
+                return False
+            return True
+        except Exception as e:
+            self.logger.error(f"Impossible de vérifier l'espace disque: {e}")
+            # En cas d'erreur, on assume qu'il y a assez d'espace
+            return True
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(levelname)s - %(message)s',
@@ -129,6 +152,12 @@ class VideoConverter:
             
             # Charger l'option keep_backup depuis la config (défaut: True)
             self.keep_backup = self.config.get('keep_backup', True)
+            
+            # Vérifier l'espace disque disponible
+            # Si espace < 10%, forcer keep_backup à False
+            if not self._check_disk_space():
+                self.keep_backup = False
+            
             self.logger.info(f"Conserver les backups: {self.keep_backup}")
             
             self.logger.info(f"Configuration chargée depuis {self.config_file}")
