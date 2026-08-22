@@ -1,0 +1,60 @@
+2024-01-15 10:30:00,123 - INFO - ============================================================
+2024-01-15 10:30:00,124 - INFO - DEBUT DE LA CONVERSION VIDEO
+2024-01-15 10:30:00,124 - INFO - ============================================================
+2024-01-15 10:30:00,125 - INFO - Configuration chargée depuis video_converter.conf
+2024-01-15 10:30:00,125 - INFO - Répertoires à scanner: /videos/movies, /videos/series
+2024-01-15 10:30:00,126 - INFO - Fichiers marqués comme échoués: 2
+2024-01-15 10:30:00,126 - INFO - Fichiers déjà convertis: 15
+2024-01-15 10:30:00,127 - INFO - Scan du répertoire: /videos/movies
+2024-01-15 10:30:01,456 - INFO - Scan du répertoire: /videos/series
+2024-01-15 10:30:02,789 - INFO - Trouvé 50 fichiers vidéo à traiter
+2024-01-15 10:30:02,790 - INFO - Fichiers H.264 à convertir: 25
+
+2024-01-15 10:30:03,012 - INFO - Traitement de: /videos/movies/movie1.mkv
+2024-01-15 10:30:03,012 - INFO -   Codec: h264
+2024-01-15 10:30:03,012 - INFO -   Taille: 15000000000 bytes
+2024-01-15 10:30:03,013 - INFO - Conversion de /videos/movies/movie1.mkv vers /videos/movies/movie1_hevc.mkv
+2024-01-15 10:30:03,013 - INFO - Commande: ffmpeg -i /videos/movies/movie1.mkv -c:v hevc_nvenc -preset p7 -tune hq -rc constqp -qp 23 -profile main10 -c:a copy -c:s copy -map 0 -y /videos/movies/movie1_hevc.mkv
+2024-01-15 10:35:00,234 - INFO - Conversion terminée en 297.22 secondes
+2024-01-15 10:35:00,235 - INFO - Réduction de taille: 45.20% (15000000000 -> 8200000000 bytes)
+2024-01-15 10:35:00,236 - INFO - Backup créé: /videos/movies/movie1.mkv.backup_20240115_103500
+2024-01-15 10:35:00,237 - INFO - Fichier converti déplacé vers: /videos/movies/movie1.mkv
+2024-01-15 10:35:00,237 - INFO - Fichier converti avec succès et remplacé: /videos/movies/movie1.mkv
+
+2024-01-15 10:35:00,238 - INFO - Traitement de: /videos/movies/movie2.mp4
+2024-01-15 10:35:00,238 - INFO -   Codec: h264
+2024-01-15 10:35:00,238 - INFO -   Taille: 8000000000 bytes
+2024-01-15 10:35:00,239 - INFO - Conversion de /videos/movies/movie2.mp4 vers /videos/movies/movie2_hevc.mp4
+2024-01-15 10:40:00,456 - INFO - Conversion terminée en 299.80 secondes
+2024-01-15 10:40:00,457 - INFO - Réduction de taille: 55.30% (8000000000 -> 3584000000 bytes)
+2024-01-15 10:40:00,458 - INFO - Backup créé: /videos/movies/movie2.mp4.backup_20240115_104000
+2024-01-15 10:40:00,459 - INFO - Fichier converti déplacé vers: /videos/movies/movie2.mp4
+2024-01-15 10:40:00,459 - INFO - Fichier converti avec succès et remplacé: /videos/movies/movie2.mp4
+
+2024-01-15 10:40:00,460 - INFO - Traitement de: /videos/series/episode1.avi
+2024-01-15 10:40:00,460 - INFO -   Codec: h264
+2024-01-15 10:40:00,460 - INFO -   Taille: 2000000000 bytes
+2024-01-15 10:40:00,461 - INFO - Conversion de /videos/series/episode1.avi vers /videos/series/episode1_hevc.avi
+2024-01-15 10:42:00,123 - ERROR - ffmpeg a échoué: [hevc_nvenc @ 0x7f8a1c00b000] NVENC encoder not available
+2024-01-15 10:42:00,124 - ERROR - Conversion échouée pour /videos/series/episode1.avi: ffmpeg a échoué: [hevc_nvenc @ 0x7f8a1c00b000] NVENC encoder not available
+2024-01-15 10:42:00,125 - INFO - Fichier temporaire supprimé: /videos/series/episode1_hevc.avi
+
+2024-01-15 10:42:00,126 - INFO - Traitement de: /videos/series/episode2.mkv
+2024-01-15 10:42:00,126 - INFO -   Codec: hevc
+2024-01-15 10:42:00,126 - DEBUG - Fichier déjà au format moderne (hevc): /videos/series/episode2.mkv
+
+2024-01-15 10:42:00,127 - INFO - Traitement de: /videos/movies/small_movie.mp4
+2024-01-15 10:42:00,127 - INFO -   Codec: h264
+2024-01-15 10:42:00,127 - INFO -   Taille: 500000000 bytes
+2024-01-15 10:42:00,128 - INFO - Conversion de /videos/movies/small_movie.mp4 vers /videos/movies/small_movie_hevc.mp4
+2024-01-15 10:43:00,456 - INFO - Conversion terminée en 59.78 secondes
+2024-01-15 10:43:00,457 - INFO - Réduction de taille: 5.20% (500000000 -> 474000000 bytes)
+2024-01-15 10:43:00,458 - INFO - Réduction insuffisante (5.20% < 10%), fichier original conservé
+
+2024-01-15 11:30:00,123 - INFO - ============================================================
+2024-01-15 11:30:00,123 - INFO - RESUME DE LA CONVERSION
+2024-01-15 11:30:00,123 - INFO - ============================================================
+2024-01-15 11:30:00,123 - INFO - Durée totale: 0:59:59.999999
+2024-01-15 11:30:00,123 - INFO - Fichiers convertis avec succès: 2
+2024-01-15 11:30:00,123 - INFO - Fichiers échoués ou ignorés: 3
+2024-01-15 11:30:00,123 - INFO - ============================================================

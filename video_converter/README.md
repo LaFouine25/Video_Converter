@@ -1,0 +1,171 @@
+# Video Converter - H.264 vers HEVC
+
+Script Python pour convertir automatiquement les fichiers vidéo H.264 en HEVC avec FFmpeg.
+
+## Fonctionnalités
+
+- 🔍 Scan récursif des répertoires configurés
+- 📹 Détection des fichiers MKV, MP4, AVI
+- 🎯 Identification des codecs vidéo (H.264, HEVC, AV1)
+- ⚡ Conversion H.264 → HEVC via FFmpeg avec NVENC
+- 📊 Comparaison des tailles avant/après conversion
+- ✅ Conservation uniquement si réduction ≥ 10%
+- 🚫 Marquage des fichiers échoués pour éviter les retraitements
+- 📝 Journalisation complète
+
+## Prérequis
+
+- Python 3.7+
+- FFmpeg 4.4+ (avec support NVENC pour NVIDIA)
+- Système d'exploitation: Linux, macOS, Windows (avec WSL)
+
+### Installation des dépendances
+
+#### Ubuntu/Debian
+```bash
+sudo apt update
+sudo apt install python3 ffmpeg
+```
+
+#### macOS (Homebrew)
+```bash
+brew install python ffmpeg
+```
+
+#### Windows (Chocolatey)
+```powershell
+choco install python ffmpeg
+```
+
+## Installation
+
+1. Cloner ou télécharger ce dépôt
+2. Modifier le fichier de configuration
+3. Exécuter le script
+
+## Configuration
+
+### Fichier `video_converter.conf`
+
+```json
+{
+    "directories": [
+        "/chemin/vers/vos/videos",
+        "/autre/chemin/avec/videos"
+    ],
+    "min_size_mb": 10,
+    "max_size_gb": 50,
+    "keep_backup": true
+}
+```
+
+**Options:**
+- `directories`: Liste des répertoires à scanner (répertoires relatifs ou absolus)
+- `min_size_mb`: Taille minimale des fichiers à traiter (en Mo)
+- `max_size_gb`: Taille maximale des fichiers à traiter (en Go)
+- `keep_backup`: Conserver les backups des fichiers originaux
+
+### Paramètres FFmpeg
+
+Les paramètres de conversion sont définis dans le script:
+- Codec: `hevc_nvenc` (utilise l'encodage matériel NVIDIA)
+- Preset: `p7` (qualité optimale)
+- Tune: `hq` (optimisation pour la qualité)
+- RC: `constqp` (contrôle du débit constant QP)
+- QP: `23` (valeur de quantification)
+- Profile: `main10` (profile H.265/HEVC)
+- Audio: `copy` (copie sans ré-encodage)
+- Sous-titres: `copy` (copie sans ré-encodage)
+
+## Utilisation
+
+### Exécution basique
+```bash
+python video_converter.py
+```
+
+### Avec un fichier de configuration personnalisé
+```bash
+python video_converter.py mon_config.conf
+```
+
+### Exemple de sortie
+```
+2024-01-15 10:30:00 - INFO - Configuration chargée depuis video_converter.conf
+2024-01-15 10:30:00 - INFO - Répertoires à scanner: /videos/movies, /videos/series
+2024-01-15 10:30:01 - INFO - Scan du répertoire: /videos/movies
+2024-01-15 10:30:02 - INFO - Trouvé 50 fichiers vidéo à traiter
+2024-01-15 10:30:03 - INFO - Fichiers H.264 à convertir: 25
+2024-01-15 10:30:04 - INFO - Conversion de /videos/movies/movie1.mkv vers /videos/movies/movie1_hevc.mkv
+2024-01-15 10:35:00 - INFO - Conversion terminée en 296.50 secondes
+2024-01-15 10:35:00 - INFO - Réduction de taille: 45.20% (15000000000 -> 8200000000 bytes)
+2024-01-15 10:35:01 - INFO - Fichier converti avec succès et remplacé
+...
+2024-01-15 11:30:00 - INFO - RESUME DE LA CONVERSION
+2024-01-15 11:30:00 - INFO - Durée totale: 0:59:59
+2024-01-15 11:30:00 - INFO - Fichiers convertis avec succès: 20
+2024-01-15 11:30:00 - INFO - Fichiers échoués ou ignorés: 5
+```
+
+## Fichiers générés
+
+- `video_converter.log`: Journal des opérations
+- `.failed_conversion`: Liste des fichiers échoués
+- `.converted_hevc`: Liste des fichiers déjà convertis
+- `*.backup_YYYYMMDD_HHMMSS`: Backups des fichiers originaux
+
+## Personnalisation
+
+### Changer les paramètres FFmpeg
+
+Modifier les constantes dans le script:
+```python
+FFMPEG_HEVC_PARAMS = [
+    "-c:v", "hevc_nvenc",
+    "-preset", "p7",
+    "-tune", "hq",
+    "-rc", "constqp",
+    "-qp", "23",
+    "-profile", "main10",
+    "-c:a", "copy",
+    "-c:s", "copy",
+    "-map", "0"
+]
+```
+
+### Changer le seuil de réduction
+
+```python
+SIZE_REDUCTION_THRESHOLD = 0.10  # 10%
+```
+
+## Dépannage
+
+### Erreur: ffmpeg non trouvé
+```
+ERREUR: ffmpeg et ffprobe sont requis. Veuillez les installer.
+```
+**Solution:** Installer FFmpeg comme indiqué dans les prérequis.
+
+### Erreur: Impossible de détecter le codec
+```
+Codec inconnu pour /chemin/fichier.mkv, ignoré
+```
+**Solution:** Vérifier que le fichier est valide avec `ffprobe /chemin/fichier.mkv`
+
+### Erreur: Pas de GPU NVIDIA
+```
+Error while opening encoder for output stream #0:0 - hardware encoder (codec hevc) not available
+```
+**Solution:** Utiliser un autre encodeur:
+- `libx265` pour le CPU (plus lent)
+- `hevc_amf` pour AMD
+- `hevc_videotoolbox` pour macOS
+
+## Contribution
+
+Les contributions sont les bienvenues ! Ouvrez une issue ou soumettez une pull request.
+
+## Licence
+
+MIT
