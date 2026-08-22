@@ -93,6 +93,7 @@ class VideoConverter:
         self.config: Dict = {}
         self.failed_files: set = set()
         self.converted_files: set = set()
+        self.keep_backup: bool = True  # Valeur par défaut
         self._setup_logging()
         
     def _setup_logging(self) -> None:
@@ -125,6 +126,10 @@ class VideoConverter:
             if not isinstance(self.config['directories'], list):
                 self.logger.error("'directories' doit être une liste de chemins")
                 return False
+            
+            # Charger l'option keep_backup depuis la config (défaut: True)
+            self.keep_backup = self.config.get('keep_backup', True)
+            self.logger.info(f"Conserver les backups: {self.keep_backup}")
             
             self.logger.info(f"Configuration chargée depuis {self.config_file}")
             self.logger.info(f"Répertoires à scanner: {', '.join(self.config['directories'])}")
@@ -398,21 +403,30 @@ class VideoConverter:
     
     def _replace_original(self, result: ConversionResult) -> None:
         """Remplace le fichier original par le fichier converti."""
-        # Sauvegarder l'original avec un timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_path = f"{result.original_file}.backup_{timestamp}"
+        if self.keep_backup:
+            # Sauvegarder l'original avec un timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = f"{result.original_file}.backup_{timestamp}"
+            
+            try:
+                # Renommer l'original en backup
+                os.rename(result.original_file, backup_path)
+                self.logger.info(f"Backup créé: {backup_path}")
+            except Exception as e:
+                self.logger.error(f"Erreur lors de la création du backup: {e}")
+                raise
+        else:
+            # Supprimer directement l'original
+            try:
+                os.remove(result.original_file)
+                self.logger.info(f"Fichier original supprimé: {result.original_file}")
+            except Exception as e:
+                self.logger.error(f"Erreur lors de la suppression de l'original: {e}")
+                raise
         
-        try:
-            # Renommer l'original en backup
-            os.rename(result.original_file, backup_path)
-            self.logger.info(f"Backup créé: {backup_path}")
-            
-            # Renommer le converti en original
-            os.rename(result.converted_file, result.original_file)
-            self.logger.info(f"Fichier converti déplacé vers: {result.original_file}")
-            
-            # Optionnel: supprimer le backup si tout va bien
-            # os.remove(backup_path)
+        # Renommer le converti en original
+        os.rename(result.converted_file, result.original_file)
+        self.logger.info(f"Fichier converti déplacé vers: {result.original_file}")
             
         except Exception as e:
             self.logger.error(f"Erreur lors du remplacement: {e}")
