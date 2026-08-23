@@ -102,6 +102,15 @@ class VideoConverter:
         
     def _setup_logging(self) -> None:
         """Configure la journalisation."""
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(self.log_file),
+                logging.StreamHandler()
+            ]
+        )
+        self.logger = logging.getLogger('VideoConverter')
 
     def _check_disk_space(self) -> bool:
         """Vérifie si l'espace disque disponible est suffisant."""
@@ -121,15 +130,6 @@ class VideoConverter:
             self.logger.error(f"Impossible de vérifier l'espace disque: {e}")
             # En cas d'erreur, on assume qu'il y a assez d'espace
             return True
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler(self.log_file),
-                logging.StreamHandler()
-            ]
-        )
-        self.logger = logging.getLogger('VideoConverter')
         
     def load_config(self) -> bool:
         """Charge la configuration depuis le fichier .conf."""
@@ -454,9 +454,9 @@ class VideoConverter:
                 raise
         
         # Renommer le converti en original
-        os.rename(result.converted_file, result.original_file)
-        self.logger.info(f"Fichier converti déplacé vers: {result.original_file}")
-            
+        try:
+            os.rename(result.converted_file, result.original_file)
+            self.logger.info(f"Fichier converti déplacé vers: {result.original_file}")
         except Exception as e:
             self.logger.error(f"Erreur lors du remplacement: {e}")
             # Essayer de restaurer
