@@ -709,11 +709,9 @@ def main():
         else:
             # C'est un fichier ou répertoire cible
             target_path = first_arg
-            # Générer un nom de log basé sur le target
-            if os.path.isfile(target_path):
-                log_file = os.path.splitext(target_path)[0] + ".log"
-            elif os.path.isdir(target_path):
-                log_file = os.path.join(target_path, "conversion.log")
+            # Toujours utiliser le répertoire du script pour le log
+            script_dir = os.path.dirname(os.path.abspath(__file__)) or '.'
+            log_file = os.path.join(script_dir, DEFAULT_LOG_FILE)
     
     print(f"Utilisation de la configuration: {config_file}")
     if target_path:
