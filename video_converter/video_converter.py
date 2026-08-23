@@ -421,8 +421,9 @@ class VideoConverter:
             'ffmpeg',
             '-i', video_file.path,
             *FFMPEG_HEVC_PARAMS,
-            *metadata_cmd,
             *map_cmd,
+            '-map_metadata', '-1',  # Désactiver la copie des métadonnées des streams
+            *metadata_cmd,
             '-y',  # Écrase le fichier de sortie si il existe
             output_path
         ]
