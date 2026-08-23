@@ -460,7 +460,7 @@ class VideoConverter:
             '-i', video_file.path,
             *FFMPEG_HEVC_PARAMS,
             *map_cmd,
-            '-map_metadata', '-1',  # Désactiver la copie des métadonnées des streams
+            '-map_metadata', '0',  # Copier les métadonnées du conteneur source
             *metadata_cmd,
             '-y',  # Écrase le fichier de sortie si il existe
             output_path
