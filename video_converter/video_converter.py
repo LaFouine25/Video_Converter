@@ -453,13 +453,15 @@ class VideoConverter:
                     self.logger.info(f"Exclusion du sous-titre non supporté (index {subtitle['index']}, codec: {subtitle['codec']})")
         
         # Construire la commande FFmpeg
+        # Pour MP4->MKV, on doit copier les métadonnées mais écraser la langue audio
         cmd = [
             'ffmpeg',
             '-i', video_file.path,
             *FFMPEG_HEVC_PARAMS,
             *map_cmd,
             '-map_metadata', '0',  # Copier les métadonnées du conteneur source
-            *metadata_cmd,
+            '-map_metadata:s:a', '-1',  # Désactiver la copie des métadonnées des streams audio
+            *metadata_cmd,  # Nos corrections de langue seront appliquées
             '-y',  # Écrase le fichier de sortie si il existe
             output_path
         ]
