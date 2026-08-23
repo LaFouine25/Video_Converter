@@ -44,9 +44,7 @@ FFMPEG_HEVC_PARAMS = [
     "-rc", "constqp",
     "-qp", "23",
     "-profile", "main10",
-    "-c:a", "copy",
-    "-c:s", "copy",
-    "-map", "0"
+    "-c:a", "copy"
 ]
 
 # Seuil de réduction de taille (10%)
@@ -345,6 +343,34 @@ class VideoConverter:
             self.logger.error(f"Erreur lors de la récupération des pistes audio pour {file_path}: {e}")
             return []
     
+    def get_subtitle_streams_info(self, file_path: str) -> List[Dict]:
+        """Récupère les informations des pistes de sous-titres via ffprobe."""
+        try:
+            cmd = [
+                'ffprobe',
+                '-v', 'error',
+                '-select_streams', 's',
+                '-show_entries', 'stream=index,codec_name',
+                '-of', 'json',
+                file_path
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            data = json.loads(result.stdout)
+            
+            subtitle_streams = []
+            if data.get('streams'):
+                for stream in data['streams']:
+                    subtitle_info = {
+                        'index': stream.get('index'),
+                        'codec': stream.get('codec_name', '')
+                    }
+                    subtitle_streams.append(subtitle_info)
+            return subtitle_streams
+        except Exception as e:
+            self.logger.error(f"Erreur lors de la récupération des pistes de sous-titres pour {file_path}: {e}")
+            return []
+    
     def needs_conversion(self, video_file: VideoFile) -> bool:
         """Détermine si un fichier doit être converti."""
         if video_file.codec is None:
@@ -359,7 +385,7 @@ class VideoConverter:
         return False
     
     def convert_to_hevc(self, video_file: VideoFile) -> ConversionResult:
-        """Convertit un fichier vidéo en HEVC avec correction des pistes audio."""
+        """Convertit un fichier vidéo en HEVC avec correction des pistes audio et exclusion des sous-titres non supportés."""
         # Générer le chemin de sortie (gère l'extension MKV si MP4 + H.264)
         output_path = self._generate_output_path(video_file.path, video_file.codec)
         
@@ -376,11 +402,25 @@ class VideoConverter:
                     ])
                     self.logger.info(f"Correction de la langue audio (index {audio['index']}): {AVESTAN_LANG} -> {FRENCH_LANG}")
         
+        # Vérifier les sous-titres et exclure ceux non supportés
+        subtitle_streams = self.get_subtitle_streams_info(video_file.path)
+        map_cmd = ['-map', '0']  # Par défaut, on map tout
+        
+        for subtitle in subtitle_streams:
+            # Exclure les sous-titres avec codec non supporté (comme 94213)
+            if subtitle.get('codec') and subtitle.get('codec').isdigit():
+                # C'est un codec non standard, l'exclure
+                if subtitle.get('index') is not None:
+                    map_cmd.extend(['-map', '-s:' + str(subtitle['index'])])
+                    self.logger.info(f"Exclusion du sous-titre non supporté (index {subtitle['index']}, codec: {subtitle['codec']})")
+        
+        # Construire la commande FFmpeg
         cmd = [
             'ffmpeg',
             '-i', video_file.path,
             *FFMPEG_HEVC_PARAMS,
             *metadata_cmd,
+            *map_cmd,
             '-y',  # Écrase le fichier de sortie si il existe
             output_path
         ]
