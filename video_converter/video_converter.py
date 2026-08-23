@@ -435,25 +435,43 @@ class VideoConverter:
             if not needs_correction:
                 return True
             
-            # Construire la commande de correction
-            cmd = ['ffmpeg', '-i', file_path]
-            for audio in audio_streams:
-                lang = audio.get('language', '')
-                if lang and ('Avestan' in lang or lang.lower() in ['ae', 'ave', 'ae;ave', 'ave;ae']):
-                    if audio.get('index') is not None:
-                        cmd.extend([
-                            '-metadata:s:a:' + str(audio['index']), f'language={FRENCH_LANG}',
-                            '-c:a', 'copy'
-                        ])
-                        self.logger.info(f"Correction de la langue audio (index {audio['index']}): {lang} -> {FRENCH_LANG}")
+            # Créer un fichier temporaire pour la correction
+            # FFmpeg ne peut pas éditer un fichier en place
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix='.mkv', delete=False) as tmp_file:
+                tmp_path = tmp_file.name
             
-            # Ajouter la sortie
-            cmd.extend(['-y', file_path])
-            
-            # Exécuter la correction
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            self.logger.info("Métadonnées audio corrigées avec succès")
-            return True
+            try:
+                # Construire la commande de correction vers le fichier temporaire
+                cmd = ['ffmpeg', '-i', file_path]
+                for audio in audio_streams:
+                    lang = audio.get('language', '')
+                    if lang and ('Avestan' in lang or lang.lower() in ['ae', 'ave', 'ae;ave', 'ave;ae']):
+                        if audio.get('index') is not None:
+                            cmd.extend([
+                                '-metadata:s:a:' + str(audio['index']), f'language={FRENCH_LANG}',
+                                '-c:a', 'copy'
+                            ])
+                            self.logger.info(f"Correction de la langue audio (index {audio['index']}): {lang} -> {FRENCH_LANG}")
+                
+                # Ajouter la sortie vers le fichier temporaire
+                cmd.extend(['-y', tmp_path])
+                
+                # Exécuter la correction
+                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                
+                # Remplacer le fichier original par le temporaire
+                import shutil
+                shutil.move(tmp_path, file_path)
+                
+                self.logger.info("Métadonnées audio corrigées avec succès")
+                return True
+                
+            except Exception as e:
+                # Nettoyer le fichier temporaire en cas d'erreur
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+                raise
             
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Erreur lors de la correction des métadonnées audio: {e.stderr}")
