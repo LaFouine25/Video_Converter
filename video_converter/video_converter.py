@@ -419,26 +419,56 @@ class VideoConverter:
         
         self.logger.debug(f"Fichier déjà au format moderne ({video_file.codec}): {video_file.path}")
         return False
+
+    def _correct_audio_language(self, file_path: str) -> bool:
+        """Corrige les métadonnées de langue des pistes audio après conversion."""
+        try:
+            audio_streams = self.get_audio_streams_info(file_path)
+            needs_correction = False
+            
+            for audio in audio_streams:
+                lang = audio.get('language', '')
+                if lang and ('Avestan' in lang or lang.lower() in ['ae', 'ave', 'ae;ave', 'ave;ae']):
+                    needs_correction = True
+                    break
+            
+            if not needs_correction:
+                return True
+            
+            # Construire la commande de correction
+            cmd = ['ffmpeg', '-i', file_path]
+            for audio in audio_streams:
+                lang = audio.get('language', '')
+                if lang and ('Avestan' in lang or lang.lower() in ['ae', 'ave', 'ae;ave', 'ave;ae']):
+                    if audio.get('index') is not None:
+                        cmd.extend([
+                            '-metadata:s:a:' + str(audio['index']), f'language={FRENCH_LANG}',
+                            '-c:a', 'copy'
+                        ])
+                        self.logger.info(f"Correction de la langue audio (index {audio['index']}): {lang} -> {FRENCH_LANG}")
+            
+            # Ajouter la sortie
+            cmd.extend(['-y', file_path])
+            
+            # Exécuter la correction
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            self.logger.info("Métadonnées audio corrigées avec succès")
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Erreur lors de la correction des métadonnées audio: {e.stderr}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Erreur inattendue lors de la correction des métadonnées: {e}")
+            return False
+
+
+
     
     def convert_to_hevc(self, video_file: VideoFile) -> ConversionResult:
         """Convertit un fichier vidéo en HEVC avec correction des pistes audio et exclusion des sous-titres non supportés."""
         # Générer le chemin de sortie (gère l'extension MKV si MP4 + H.264)
         output_path = self._generate_output_path(video_file.path, video_file.codec)
-        
-        # Vérifier et corriger les pistes audio
-        audio_streams = self.get_audio_streams_info(video_file.path)
-        metadata_cmd = []
-        
-        for audio in audio_streams:
-            lang = audio.get('language', '')
-            # Vérifier si la langue contient "Avestan" ou "ae" ou "ave" (différents formats possibles)
-            if lang and ('Avestan' in lang or lang.lower() in ['ae', 'ave', 'ae;ave', 'ave;ae']):
-                # Ajouter le metadata pour corriger la langue ET le titre
-                if audio.get('index') is not None:
-                    metadata_cmd.extend([
-                        '-metadata:s:a:' + str(audio['index']), f'language={FRENCH_LANG}'
-                    ])
-                    self.logger.info(f"Correction de la langue audio (index {audio['index']}): {lang} -> {FRENCH_LANG}")
         
         # Vérifier les sous-titres et exclure ceux non supportés
         subtitle_streams = self.get_subtitle_streams_info(video_file.path)
@@ -452,16 +482,12 @@ class VideoConverter:
                     map_cmd.extend(['-map', '-s:' + str(subtitle['index'])])
                     self.logger.info(f"Exclusion du sous-titre non supporté (index {subtitle['index']}, codec: {subtitle['codec']})")
         
-        # Construire la commande FFmpeg
-        # Pour MP4->MKV, on doit copier les métadonnées mais écraser la langue audio
+        # Construire la commande FFmpeg - Étape 1: conversion simple
         cmd = [
             'ffmpeg',
             '-i', video_file.path,
             *FFMPEG_HEVC_PARAMS,
             *map_cmd,
-            '-map_metadata', '0',  # Copier les métadonnées du conteneur source
-            '-map_metadata:s:a', '-1',  # Désactiver la copie des métadonnées des streams audio
-            *metadata_cmd,  # Nos corrections de langue seront appliquées
             '-y',  # Écrase le fichier de sortie si il existe
             output_path
         ]
@@ -554,6 +580,19 @@ class VideoConverter:
         if reduction >= SIZE_REDUCTION_THRESHOLD:
             # Remplacer l'original par le converti
             self._replace_original(result)
+            
+            # Étape 2: Corriger les métadonnées de langue sur le fichier final
+            # Utiliser final_path (qui peut être différent si MP4->MKV)
+            final_path = result.original_file
+            path_obj_orig = Path(result.original_file)
+            path_obj_conv = Path(result.converted_file)
+            
+            if path_obj_conv.suffix.lower() == '.mkv' and path_obj_orig.suffix.lower() == '.mp4':
+                final_path = str(path_obj_orig.with_suffix('.mkv'))
+            
+            if not self._correct_audio_language(final_path):
+                self.logger.warning("Échec de la correction des métadonnées audio")
+            
             self.converted_files.add(abs_original)
             self.logger.info(f"Fichier converti avec succès et remplacé: {result.original_file}")
             return True
