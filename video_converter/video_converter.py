@@ -93,13 +93,15 @@ class VideoConverter:
     """Classe principale pour la conversion vidéo."""
     
     def __init__(self, config_file: str = DEFAULT_CONFIG_FILE, 
-                 log_file: str = DEFAULT_LOG_FILE):
+                 log_file: str = DEFAULT_LOG_FILE, 
+                 target_path: Optional[str] = None):
         self.config_file = config_file
         self.log_file = log_file
         self.config: Dict = {}
         self.failed_files: set = set()
         self.converted_files: set = set()
         self.keep_backup: bool = True  # Valeur par défaut
+        self.target_path = target_path  # Fichier ou répertoire cible
         self._setup_logging()
         
     def _setup_logging(self) -> None:
@@ -217,28 +219,64 @@ class VideoConverter:
         """Scanne les répertoires pour trouver les fichiers vidéo."""
         video_files = []
         
-        for directory in self.config['directories']:
-            if not os.path.exists(directory):
-                self.logger.warning(f"Répertoire introuvable: {directory}")
-                continue
-            
-            self.logger.info(f"Scan du répertoire: {directory}")
-            
-            for root, _, files in os.walk(directory):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    ext = os.path.splitext(file)[1].lower()
-                    
-                    if ext in VIDEO_EXTENSIONS:
-                        # Vérifier si le fichier est déjà marqué
-                        abs_path = os.path.abspath(file_path)
-                        if abs_path in self.failed_files or abs_path in self.converted_files:
-                            self.logger.debug(f"Fichier déjà traité: {file_path}")
-                            continue
-                        
-                        video_file = self._create_video_file(file_path)
+        # Si un target_path est fourni, l'utiliser comme source
+        if self.target_path:
+            if os.path.isfile(self.target_path):
+                # C'est un fichier unique
+                self.logger.info(f"Traitement du fichier cible: {self.target_path}")
+                ext = os.path.splitext(self.target_path)[1].lower()
+                if ext in VIDEO_EXTENSIONS:
+                    abs_path = os.path.abspath(self.target_path)
+                    if abs_path not in self.failed_files and abs_path not in self.converted_files:
+                        video_file = self._create_video_file(self.target_path)
                         if video_file:
                             video_files.append(video_file)
+                else:
+                    self.logger.warning(f"Le fichier cible n'est pas une vidéo supportée: {self.target_path}")
+            elif os.path.isdir(self.target_path):
+                # C'est un répertoire, scanner récursivement
+                self.logger.info(f"Scan du répertoire cible: {self.target_path}")
+                for root, _, files in os.walk(self.target_path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        ext = os.path.splitext(file)[1].lower()
+                        
+                        if ext in VIDEO_EXTENSIONS:
+                            # Vérifier si le fichier est déjà marqué
+                            abs_path = os.path.abspath(file_path)
+                            if abs_path in self.failed_files or abs_path in self.converted_files:
+                                self.logger.debug(f"Fichier déjà traité: {file_path}")
+                                continue
+                            
+                            video_file = self._create_video_file(file_path)
+                            if video_file:
+                                video_files.append(video_file)
+            else:
+                self.logger.error(f"Chemin cible introuvable: {self.target_path}")
+        else:
+            # Utiliser la configuration
+            for directory in self.config['directories']:
+                if not os.path.exists(directory):
+                    self.logger.warning(f"Répertoire introuvable: {directory}")
+                    continue
+                
+                self.logger.info(f"Scan du répertoire: {directory}")
+                
+                for root, _, files in os.walk(directory):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        ext = os.path.splitext(file)[1].lower()
+                        
+                        if ext in VIDEO_EXTENSIONS:
+                            # Vérifier si le fichier est déjà marqué
+                            abs_path = os.path.abspath(file_path)
+                            if abs_path in self.failed_files or abs_path in self.converted_files:
+                                self.logger.debug(f"Fichier déjà traité: {file_path}")
+                                continue
+                            
+                            video_file = self._create_video_file(file_path)
+                            if video_file:
+                                video_files.append(video_file)
         
         self.logger.info(f"Trouvé {len(video_files)} fichiers vidéo à traiter")
         return video_files
@@ -652,19 +690,37 @@ def main():
         print("Sur macOS: brew install ffmpeg")
         sys.exit(1)
     
-    # Utiliser le fichier de configuration par défaut
+    # Gestion des arguments
     config_file = DEFAULT_CONFIG_FILE
     log_file = DEFAULT_LOG_FILE
+    target_path = None
     
-    # Vérifier si un fichier de configuration est passé en argument
+    # Si des arguments sont fournis
     if len(sys.argv) > 1:
-        config_file = sys.argv[1]
-        log_file = os.path.splitext(config_file)[0] + ".log"
+        first_arg = sys.argv[1]
+        
+        # Vérifier si c'est un fichier de configuration
+        if first_arg.endswith('.conf') or first_arg.endswith('.json'):
+            config_file = first_arg
+            log_file = os.path.splitext(first_arg)[0] + ".log"
+            # Vérifier s'il y a un second argument (fichier/répertoire cible)
+            if len(sys.argv) > 2:
+                target_path = sys.argv[2]
+        else:
+            # C'est un fichier ou répertoire cible
+            target_path = first_arg
+            # Générer un nom de log basé sur le target
+            if os.path.isfile(target_path):
+                log_file = os.path.splitext(target_path)[0] + ".log"
+            elif os.path.isdir(target_path):
+                log_file = os.path.join(target_path, "conversion.log")
     
     print(f"Utilisation de la configuration: {config_file}")
+    if target_path:
+        print(f"Cible: {target_path}")
     print(f"Fichier de log: {log_file}")
     
-    converter = VideoConverter(config_file, log_file)
+    converter = VideoConverter(config_file, log_file, target_path)
     converter.run()
 
 
