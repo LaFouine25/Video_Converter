@@ -55,6 +55,10 @@ SIZE_REDUCTION_THRESHOLD = 0.10
 # Seuil minimal d'espace disque disponible (10%)
 MIN_DISK_SPACE_THRESHOLD = 0.10
 
+# Langues pour correction audio
+AVESTAN_LANG = 'Avestan/ae;ave'
+FRENCH_LANG = 'French/fr; fre/fr; 250'
+
 
 @dataclass
 class VideoFile:
@@ -311,6 +315,36 @@ class VideoConverter:
             self.logger.error(f"Erreur lors de la détection du codec pour {file_path}: {e}")
             return {'codec': None}
     
+    def get_audio_streams_info(self, file_path: str) -> List[Dict]:
+        """Récupère les informations des pistes audio via ffprobe."""
+        try:
+            cmd = [
+                'ffprobe',
+                '-v', 'error',
+                '-select_streams', 'a',
+                '-show_entries', 'stream=index,codec_name',
+                '-show_entries', 'stream_tags=language',
+                '-of', 'json',
+                file_path
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            data = json.loads(result.stdout)
+            
+            audio_streams = []
+            if data.get('streams'):
+                for stream in data['streams']:
+                    audio_info = {
+                        'index': stream.get('index'),
+                        'codec': stream.get('codec_name', ''),
+                        'language': stream.get('tags', {}).get('language', '')
+                    }
+                    audio_streams.append(audio_info)
+            return audio_streams
+        except Exception as e:
+            self.logger.error(f"Erreur lors de la récupération des pistes audio pour {file_path}: {e}")
+            return []
+    
     def needs_conversion(self, video_file: VideoFile) -> bool:
         """Détermine si un fichier doit être converti."""
         if video_file.codec is None:
@@ -325,13 +359,28 @@ class VideoConverter:
         return False
     
     def convert_to_hevc(self, video_file: VideoFile) -> ConversionResult:
-        """Convertit un fichier vidéo en HEVC."""
-        output_path = self._generate_output_path(video_file.path)
+        """Convertit un fichier vidéo en HEVC avec correction des pistes audio."""
+        # Générer le chemin de sortie (gère l'extension MKV si MP4 + H.264)
+        output_path = self._generate_output_path(video_file.path, video_file.codec)
+        
+        # Vérifier et corriger les pistes audio
+        audio_streams = self.get_audio_streams_info(video_file.path)
+        metadata_cmd = []
+        
+        for audio in audio_streams:
+            if audio.get('language', '') == AVESTAN_LANG:
+                # Ajouter le metadata pour corriger la langue
+                if audio.get('index') is not None:
+                    metadata_cmd.extend([
+                        '-metadata:s:a:' + str(audio['index']), f'language={FRENCH_LANG}'
+                    ])
+                    self.logger.info(f"Correction de la langue audio (index {audio['index']}): {AVESTAN_LANG} -> {FRENCH_LANG}")
         
         cmd = [
             'ffmpeg',
             '-i', video_file.path,
             *FFMPEG_HEVC_PARAMS,
+            *metadata_cmd,
             '-y',  # Écrase le fichier de sortie si il existe
             output_path
         ]
@@ -390,11 +439,15 @@ class VideoConverter:
                 error_message=error_msg
             )
     
-    def _generate_output_path(self, input_path: str) -> str:
+    def _generate_output_path(self, input_path: str, video_codec: str = None) -> str:
         """Génère le chemin de sortie pour le fichier converti."""
         path_obj = Path(input_path)
-        # Ajouter _hevc avant l'extension
         new_stem = f"{path_obj.stem}_hevc"
+        
+        # Si le fichier est en MP4 avec codec H.264, convertir en MKV
+        if path_obj.suffix.lower() == '.mp4' and video_codec == 'h264':
+            return str(path_obj.with_stem(new_stem).with_suffix('.mkv'))
+        
         return str(path_obj.with_stem(new_stem))
     
     def process_conversion_result(self, result: ConversionResult) -> bool:
