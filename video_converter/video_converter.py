@@ -394,13 +394,15 @@ class VideoConverter:
         metadata_cmd = []
         
         for audio in audio_streams:
-            if audio.get('language', '') == AVESTAN_LANG:
+            lang = audio.get('language', '')
+            # Vérifier si la langue contient "Avestan" ou "ae" ou "ave" (différents formats possibles)
+            if lang and ('Avestan' in lang or lang.lower() in ['ae', 'ave', 'ae;ave', 'ave;ae']):
                 # Ajouter le metadata pour corriger la langue
                 if audio.get('index') is not None:
                     metadata_cmd.extend([
                         '-metadata:s:a:' + str(audio['index']), f'language={FRENCH_LANG}'
                     ])
-                    self.logger.info(f"Correction de la langue audio (index {audio['index']}): {AVESTAN_LANG} -> {FRENCH_LANG}")
+                    self.logger.info(f"Correction de la langue audio (index {audio['index']}): {lang} -> {FRENCH_LANG}")
         
         # Vérifier les sous-titres et exclure ceux non supportés
         subtitle_streams = self.get_subtitle_streams_info(video_file.path)
@@ -525,6 +527,15 @@ class VideoConverter:
     
     def _replace_original(self, result: ConversionResult) -> None:
         """Remplace le fichier original par le fichier converti."""
+        # Déterminer le chemin final : si le converti est en .mkv et l'original en .mp4, garder .mkv
+        final_path = result.original_file
+        path_obj_orig = Path(result.original_file)
+        path_obj_conv = Path(result.converted_file)
+        
+        if path_obj_conv.suffix.lower() == '.mkv' and path_obj_orig.suffix.lower() == '.mp4':
+            # Changer l'extension de la destination finale en .mkv
+            final_path = str(path_obj_orig.with_suffix('.mkv'))
+        
         if self.keep_backup:
             # Sauvegarder l'original avec un timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -546,10 +557,10 @@ class VideoConverter:
                 self.logger.error(f"Erreur lors de la suppression de l'original: {e}")
                 raise
         
-        # Renommer le converti en original
+        # Renommer le converti vers le chemin final (qui peut être .mkv)
         try:
-            os.rename(result.converted_file, result.original_file)
-            self.logger.info(f"Fichier converti déplacé vers: {result.original_file}")
+            os.rename(result.converted_file, final_path)
+            self.logger.info(f"Fichier converti déplacé vers: {final_path}")
         except Exception as e:
             self.logger.error(f"Erreur lors du remplacement: {e}")
             # Essayer de restaurer
