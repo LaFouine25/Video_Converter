@@ -55,7 +55,7 @@ MIN_DISK_SPACE_THRESHOLD = 0.10
 
 # Langues pour correction audio
 AVESTAN_LANG = 'Avestan/ae;ave'
-FRENCH_LANG = 'French/fr; fre/fr; 250'
+FRENCH_LANG = 'fre'
 
 
 @dataclass
@@ -400,10 +400,9 @@ class VideoConverter:
                 # Ajouter le metadata pour corriger la langue ET le titre
                 if audio.get('index') is not None:
                     metadata_cmd.extend([
-                        '-metadata:s:a:' + str(audio['index']), f'language={FRENCH_LANG}',
-                        '-metadata:s:a:' + str(audio['index']), f'title={FRENCH_LANG}'
+                        '-metadata:s:a:' + str(audio['index']), f'language={FRENCH_LANG}'
                     ])
-                    self.logger.info(f"Correction de la langue et du titre audio (index {audio['index']}): {lang} -> {FRENCH_LANG}")
+                    self.logger.info(f"Correction de la langue audio (index {audio['index']}): {lang} -> {FRENCH_LANG}")
         
         # Vérifier les sous-titres et exclure ceux non supportés
         subtitle_streams = self.get_subtitle_streams_info(video_file.path)
