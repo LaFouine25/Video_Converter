@@ -222,15 +222,13 @@ class VideoConverter:
         # Si un target_path est fourni, l'utiliser comme source
         if self.target_path:
             if os.path.isfile(self.target_path):
-                # C'est un fichier unique
+                # C'est un fichier unique - toujours traiter même s'il est marqué
                 self.logger.info(f"Traitement du fichier cible: {self.target_path}")
                 ext = os.path.splitext(self.target_path)[1].lower()
                 if ext in VIDEO_EXTENSIONS:
-                    abs_path = os.path.abspath(self.target_path)
-                    if abs_path not in self.failed_files and abs_path not in self.converted_files:
-                        video_file = self._create_video_file(self.target_path)
-                        if video_file:
-                            video_files.append(video_file)
+                    video_file = self._create_video_file(self.target_path)
+                    if video_file:
+                        video_files.append(video_file)
                 else:
                     self.logger.warning(f"Le fichier cible n'est pas une vidéo supportée: {self.target_path}")
             elif os.path.isdir(self.target_path):
