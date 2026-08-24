@@ -352,6 +352,8 @@ class VideoConverter:
     def get_audio_streams_info(self, file_path: str) -> List[Dict]:
         """Récupère les informations des pistes audio via ffprobe."""
         try:
+            # Utiliser -select_streams a pour obtenir uniquement les streams audio
+            # L'index retourné sera l'index AUDIO (0-based), pas l'index global
             cmd = [
                 'ffprobe',
                 '-v', 'error',
@@ -368,8 +370,12 @@ class VideoConverter:
             audio_streams = []
             if data.get('streams'):
                 for stream in data['streams']:
+                    # L'index ici est l'index GLOBAL du stream (1, 2, 3...)
+                    # Mais avec -select_streams a, le premier audio sera index 0 dans la liste
+                    # FFmpeg utilise s:a:0 pour la première piste audio, s:a:1 pour la deuxième, etc.
+                    # Donc on utilise l'index dans la liste (0-based) comme index audio pour FFmpeg
                     audio_info = {
-                        'index': stream.get('index'),
+                        'index': len(audio_streams),  # Index audio 0-based pour FFmpeg
                         'codec': stream.get('codec_name', ''),
                         'language': stream.get('tags', {}).get('language', '')
                     }
