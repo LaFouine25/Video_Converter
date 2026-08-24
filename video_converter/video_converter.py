@@ -454,9 +454,10 @@ class VideoConverter:
                     if lang and ('Avestan' in lang or lang.lower() in ['ae', 'ave', 'ae;ave', 'ave;ae']):
                         if audio.get('index') is not None:
                             cmd.extend([
-                                '-metadata:s:a:' + str(audio['index']), f'language={FRENCH_LANG}'
+                                '-metadata:s:a:' + str(audio['index']), f'language={FRENCH_LANG}',
+                                '-metadata:s:a:' + str(audio['index']), 'title=French (France)'
                             ])
-                            self.logger.info(f"Correction de la langue audio (index {audio['index']}): {lang} -> {FRENCH_LANG}")
+                            self.logger.info(f"Correction de la langue et du titre audio (index {audio['index']}): {lang} -> {FRENCH_LANG}")
                 
                 # Ajouter la sortie vers le fichier temporaire
                 cmd.extend(['-y', tmp_path])
