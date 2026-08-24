@@ -447,14 +447,14 @@ class VideoConverter:
             
             try:
                 # Construire la commande de correction vers le fichier temporaire
-                cmd = ['ffmpeg', '-i', file_path]
+                # Utiliser -c copy pour copier TOUT sans ré-encodage
+                cmd = ['ffmpeg', '-i', file_path, '-c', 'copy']
                 for audio in audio_streams:
                     lang = audio.get('language', '')
                     if lang and ('Avestan' in lang or lang.lower() in ['ae', 'ave', 'ae;ave', 'ave;ae']):
                         if audio.get('index') is not None:
                             cmd.extend([
-                                '-metadata:s:a:' + str(audio['index']), f'language={FRENCH_LANG}',
-                                '-c:a', 'copy'
+                                '-metadata:s:a:' + str(audio['index']), f'language={FRENCH_LANG}'
                             ])
                             self.logger.info(f"Correction de la langue audio (index {audio['index']}): {lang} -> {FRENCH_LANG}")
                 
