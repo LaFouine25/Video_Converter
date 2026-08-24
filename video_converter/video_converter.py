@@ -435,11 +435,15 @@ class VideoConverter:
             if not needs_correction:
                 return True
             
-            # Créer un fichier temporaire pour la correction
+            # Créer un fichier temporaire pour la correction dans ./tmp/
             # FFmpeg ne peut pas éditer un fichier en place
+            # Utiliser le répertoire du script pour les performances (NVMe vs HDD)
             import tempfile
-            with tempfile.NamedTemporaryFile(suffix='.mkv', delete=False) as tmp_file:
-                tmp_path = tmp_file.name
+            import os
+            script_dir = os.path.dirname(os.path.abspath(__file__)) or '.'
+            tmp_dir = os.path.join(script_dir, 'tmp')
+            os.makedirs(tmp_dir, exist_ok=True)
+            tmp_fd, tmp_path = tempfile.mkstemp(suffix='.mkv', dir=tmp_dir)
             
             try:
                 # Construire la commande de correction vers le fichier temporaire
