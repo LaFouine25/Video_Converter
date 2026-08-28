@@ -393,6 +393,7 @@ class VideoConverter:
                 '-v', 'error',
                 '-select_streams', 's',
                 '-show_entries', 'stream=index,codec_name',
+                '-show_entries', 'stream_tags=language',
                 '-of', 'json',
                 file_path
             ]
@@ -405,7 +406,8 @@ class VideoConverter:
                 for stream in data['streams']:
                     subtitle_info = {
                         'index': stream.get('index'),
-                        'codec': stream.get('codec_name', '')
+                        'codec': stream.get('codec_name', ''),
+                        'language': stream.get('tags', {}).get('language', '')
                     }
                     subtitle_streams.append(subtitle_info)
             return subtitle_streams
@@ -505,18 +507,25 @@ class VideoConverter:
         
         for subtitle in subtitle_streams:
             # Exclure les sous-titres avec codec non supporté (comme 94213)
-            if subtitle.get('codec') and subtitle.get('codec').isdigit():
-                # C'est un codec non standard, l'exclure
+            codec = subtitle.get('codec', '')
+            # Exclure les codecs non standard (numériques) et les codecs bitmap comme HDMV_PGS
+            if codec and (codec.isdigit() or 'pgs' in codec.lower() or 'hdmv' in codec.lower()):
+                # C'est un codec non standard ou bitmap, l'exclure
                 if subtitle.get('index') is not None:
                     map_cmd.extend(['-map', '-s:' + str(subtitle['index'])])
                     self.logger.info(f"Exclusion du sous-titre non supporté (index {subtitle['index']}, codec: {subtitle['codec']})")
         
         # Construire la commande FFmpeg - Étape 1: conversion simple
+        # Ajouter la copie des sous-titres pour éviter le re-encodage
+        # FFmpeg ne peut encoder que text->text ou bitmap->bitmap
+        subtitle_copy_cmd = ['-c:s', 'copy']
+        
         cmd = [
             'ffmpeg',
             '-i', video_file.path,
             *FFMPEG_HEVC_PARAMS,
             *map_cmd,
+            *subtitle_copy_cmd,
             '-y',  # Écrase le fichier de sortie si il existe
             output_path
         ]
