@@ -53,6 +53,10 @@ SIZE_REDUCTION_THRESHOLD = 0.10
 # Seuil minimal d'espace disque disponible (10%)
 MIN_DISK_SPACE_THRESHOLD = 0.10
 
+# Paramètres ffprobe pour l'analyse des fichiers
+FFPROBE_ANALYZE_DURATION = 10000000  # 10MB
+FFPROBE_PROBE_SIZE = 100000000  # 100MB
+
 # Langues pour correction audio
 AVESTAN_LANG = 'Avestan/ae;ave'
 FRENCH_LANG = 'fre'
@@ -303,6 +307,8 @@ class VideoConverter:
             cmd = [
                 'ffprobe',
                 '-v', 'error',
+                '-analyzeduration', str(FFPROBE_ANALYZE_DURATION),
+                '-probesize', str(FFPROBE_PROBE_SIZE),
                 '-select_streams', 'v:0',
                 '-show_entries', 'stream=codec_name,width,height',
                 '-show_entries', 'format=duration',
@@ -357,6 +363,8 @@ class VideoConverter:
             cmd = [
                 'ffprobe',
                 '-v', 'error',
+                '-analyzeduration', str(FFPROBE_ANALYZE_DURATION),
+                '-probesize', str(FFPROBE_PROBE_SIZE),
                 '-select_streams', 'a',
                 '-show_entries', 'stream=index,codec_name',
                 '-show_entries', 'stream_tags=language',
@@ -391,6 +399,8 @@ class VideoConverter:
             cmd = [
                 'ffprobe',
                 '-v', 'error',
+                '-analyzeduration', str(FFPROBE_ANALYZE_DURATION),
+                '-probesize', str(FFPROBE_PROBE_SIZE),
                 '-select_streams', 's',
                 '-show_entries', 'stream=index,codec_name',
                 '-show_entries', 'stream_tags=language',
