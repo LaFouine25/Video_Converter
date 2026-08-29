@@ -113,6 +113,7 @@ class VideoConverter:
         self.failed_files: set = set()
         self.converted_files: set = set()
         self.keep_backup: bool = True  # Valeur par défaut
+        self.process_audio_for_modern_codecs: bool = False  # Valeur par défaut
         self.target_path = target_path  # Fichier ou répertoire cible
         self._setup_logging()
         
@@ -169,12 +170,16 @@ class VideoConverter:
             # Charger l'option keep_backup depuis la config (défaut: True)
             self.keep_backup = self.config.get('keep_backup', True)
             
+            # Charger l'option process_audio_for_modern_codecs (défaut: False)
+            self.process_audio_for_modern_codecs = self.config.get('process_audio_for_modern_codecs', False)
+            
             # Vérifier l'espace disque disponible
             # Si espace < 10%, forcer keep_backup à False
             if not self._check_disk_space():
                 self.keep_backup = False
             
             self.logger.info(f"Conserver les backups: {self.keep_backup}")
+            self.logger.info(f"Traiter l'audio des fichiers HEVC/AV1: {self.process_audio_for_modern_codecs}")
             
             self.logger.info(f"Configuration chargée depuis {self.config_file}")
             self.logger.info(f"Répertoires à scanner: {', '.join(self.config['directories'])}")
@@ -503,6 +508,15 @@ class VideoConverter:
             self.logger.info(f"Fichier à convertir (H.264): {video_file.path}")
             return True
         
+        # Pour les codecs modernes (HEVC, AV1), vérifier si on doit traiter l'audio
+        if video_file.codec.lower() in ['hevc', 'h265', 'av1']:
+            if self.process_audio_for_modern_codecs:
+                self.logger.info(f"Fichier {video_file.codec.upper()} - traitement audio uniquement: {video_file.path}")
+                return True
+            else:
+                self.logger.debug(f"Fichier déjà au format moderne ({video_file.codec}), audio non traité: {video_file.path}")
+                return False
+        
         self.logger.debug(f"Fichier déjà au format moderne ({video_file.codec}): {video_file.path}")
         return False
 
@@ -576,6 +590,9 @@ class VideoConverter:
     
     def convert_to_hevc(self, video_file: VideoFile) -> ConversionResult:
         """Convertit un fichier vidéo en HEVC avec correction des pistes audio et exclusion des sous-titres non supportés."""
+        # Vérifier si c'est un codec moderne (HEVC/AV1) avec traitement audio uniquement
+        is_modern_codec = video_file.codec.lower() in ['hevc', 'h265', 'av1']
+        
         # Générer le chemin de sortie (gère l'extension MKV si MP4 + H.264)
         output_path = self._generate_output_path(video_file.path, video_file.codec)
         
@@ -624,17 +641,23 @@ class VideoConverter:
         else:
             audio_params = ['-c:a', 'copy']
         
-        # Remplacer le paramètre -c:a dans FFMPEG_HEVC_PARAMS
-        hevc_params = []
-        for param in FFMPEG_HEVC_PARAMS:
-            if param == '-c:a':
-                continue  # On gère l'audio séparément
-            hevc_params.append(param)
+        # Pour les codecs modernes (HEVC/AV1), on ne convertit pas la vidéo
+        if is_modern_codec:
+            # Copier la vidéo sans ré-encodage
+            video_params = ['-c:v', 'copy']
+            self.logger.info(f"Copie de la vidéo {video_file.codec.upper()} sans conversion")
+        else:
+            # Remplacer le paramètre -c:a dans FFMPEG_HEVC_PARAMS
+            video_params = []
+            for param in FFMPEG_HEVC_PARAMS:
+                if param == '-c:a':
+                    continue  # On gère l'audio séparément
+                video_params.append(param)
         
         cmd = [
             'ffmpeg',
             '-i', video_file.path,
-            *hevc_params,
+            *video_params,
             *audio_params,
             *map_cmd,
             *subtitle_copy_cmd,
