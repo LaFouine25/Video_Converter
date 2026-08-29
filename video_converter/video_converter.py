@@ -374,7 +374,7 @@ class VideoConverter:
                 '-analyzeduration', str(FFPROBE_ANALYZE_DURATION),
                 '-probesize', str(FFPROBE_PROBE_SIZE),
                 '-select_streams', 'a',
-                '-show_entries', 'stream=index,codec_name,bit_rate',
+                '-show_entries', 'stream=index,codec_name,bit_rate,channels',
                 '-show_entries', 'stream_tags=language',
                 '-of', 'json',
                 file_path
@@ -390,11 +390,19 @@ class VideoConverter:
                     # Mais avec -select_streams a, le premier audio sera index 0 dans la liste
                     # FFmpeg utilise s:a:0 pour la première piste audio, s:a:1 pour la deuxième, etc.
                     # Donc on utilise l'index dans la liste (0-based) comme index audio pour FFmpeg
+                    channels = None
+                    if 'channels' in stream:
+                        try:
+                            channels = int(stream['channels'])
+                        except (ValueError, TypeError):
+                            pass
+                    
                     audio_info = {
                         'index': len(audio_streams),  # Index audio 0-based pour FFmpeg
                         'codec': stream.get('codec_name', ''),
                         'language': stream.get('tags', {}).get('language', ''),
-                        'bit_rate': stream.get('bit_rate')
+                        'bit_rate': stream.get('bit_rate'),
+                        'channels': channels
                     }
                     audio_streams.append(audio_info)
             return audio_streams
@@ -412,25 +420,46 @@ class VideoConverter:
                     return True
         return False
     
-    def should_reencode_audio(self, audio_streams: List[Dict]) -> bool:
-        """Détermine si l'audio doit être ré-encodé en AAC."""
-        if self.has_french_audio(audio_streams):
-            return False
+    def get_french_audio_indices(self, audio_streams: List[Dict]) -> List[int]:
+        """Retourne les index des pistes audio françaises."""
+        french_indices = []
+        for audio in audio_streams:
+            lang = audio.get('language', '').lower()
+            for french_code in FRENCH_LANGUAGE_CODES:
+                if french_code in lang:
+                    french_indices.append(audio['index'])
+                    break
+        return french_indices
+    
+    def get_non_french_audio_indices(self, audio_streams: List[Dict]) -> List[int]:
+        """Retourne les index des pistes audio non françaises."""
+        non_french_indices = []
+        for audio in audio_streams:
+            lang = audio.get('language', '').lower()
+            is_french = False
+            for french_code in FRENCH_LANGUAGE_CODES:
+                if french_code in lang:
+                    is_french = True
+                    break
+            if not is_french:
+                non_french_indices.append(audio['index'])
+        return non_french_indices
+    
+    def should_reencode_audio(self, audio_streams: List[Dict]) -> Tuple[bool, List[int]]:
+        """Détermine si l'audio doit être ré-encodé en AAC.
         
-        # Si pas de français, vérifier si on a une seule piste avec un bitrate supérieur à 128k
-        if len(audio_streams) == 1:
-            audio = audio_streams[0]
-            bit_rate = audio.get('bit_rate')
-            if bit_rate:
-                try:
-                    # Convertir en kbps
-                    bitrate_kbps = int(bit_rate) / 1000
-                    # Ré-encoder si le bitrate est supérieur à 128k
-                    if bitrate_kbps > 128:
-                        return True
-                except ValueError:
-                    pass
-        return False
+        Retourne:
+        - (False, non_french_indices) si au moins une piste FR existe : supprimer les non-FR sans réencodage
+        - (True, all_indices) si aucune piste FR : réencoder TOUTES les pistes en AAC
+        """
+        if self.has_french_audio(audio_streams):
+            # Supprimer les pistes non-FR, garder les FR en copy
+            non_french_indices = self.get_non_french_audio_indices(audio_streams)
+            return (False, non_french_indices)
+        else:
+            # Réencoder TOUTES les pistes en AAC
+            all_indices = [audio['index'] for audio in audio_streams]
+            return (True, all_indices)
     
     def get_subtitle_streams_info(self, file_path: str) -> List[Dict]:
         """Récupère les informations des pistes de sous-titres via ffprobe."""
@@ -550,9 +579,9 @@ class VideoConverter:
         # Générer le chemin de sortie (gère l'extension MKV si MP4 + H.264)
         output_path = self._generate_output_path(video_file.path, video_file.codec)
         
-        # Vérifier les pistes audio pour le re-encodage
+        # Vérifier les pistes audio pour le traitement
         audio_streams = self.get_audio_streams_info(video_file.path)
-        reencode_audio = self.should_reencode_audio(audio_streams)
+        reencode_audio, audio_indices_to_process = self.should_reencode_audio(audio_streams)
         
         # Vérifier les sous-titres et exclure ceux non supportés
         subtitle_streams = self.get_subtitle_streams_info(video_file.path)
@@ -568,15 +597,30 @@ class VideoConverter:
                     map_cmd.extend(['-map', '-s:' + str(subtitle['index'])])
                     self.logger.info(f"Exclusion du sous-titre non supporté (index {subtitle['index']}, codec: {subtitle['codec']})")
         
+        # Gérer les pistes audio non françaises (à supprimer)
+        if not reencode_audio and audio_indices_to_process:
+            # Supprimer les pistes non-FR (conserver les FR)
+            for audio_index in audio_indices_to_process:
+                map_cmd.extend(['-map', '-a:' + str(audio_index)])
+                self.logger.info(f"Suppression de la piste audio non-FR (index {audio_index})")
+        
         # Construire la commande FFmpeg - Étape 1: conversion simple
         # Ajouter la copie des sous-titres pour éviter le re-encodage
         # FFmpeg ne peut encoder que text->text ou bitmap->bitmap
         subtitle_copy_cmd = ['-c:s', 'copy']
         
-        # Configurer l'audio : copy par défaut, ou ré-encoder en AAC si nécessaire
+        # Configurer l'audio
         if reencode_audio:
-            audio_params = ['-c:a', AAC_CODEC, '-b:a', AAC_BITRATE, '-ac', str(AAC_CHANNELS)]
-            self.logger.info("Ré-encodage audio en AAC 128kbps stéréo (pas de piste française détectée)")
+            # Ré-encoder TOUTES les pistes en AAC avec leur nombre de canaux original
+            audio_params = ['-c:a', AAC_CODEC, '-b:a', AAC_BITRATE]
+            # Conserver le nombre de canaux original pour chaque piste
+            for audio in audio_streams:
+                channels = audio.get('channels')
+                if channels:
+                    audio_params.extend(['-ac', str(channels)])
+                else:
+                    audio_params.extend(['-ac', str(AAC_CHANNELS)])
+            self.logger.info(f"Ré-encodage de {len(audio_streams)} pistes audio en AAC 128kbps (pas de piste française)")
         else:
             audio_params = ['-c:a', 'copy']
         
