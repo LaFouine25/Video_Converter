@@ -61,6 +61,14 @@ FFPROBE_PROBE_SIZE = 100000000  # 100MB
 AVESTAN_LANG = 'Avestan/ae;ave'
 FRENCH_LANG = 'fre'
 
+# Paramètres pour le re-encodage audio en AAC
+AAC_BITRATE = '128k'
+AAC_CHANNELS = 2  # Stéréo
+AAC_CODEC = 'aac'
+
+# Liste des langages Français acceptés
+FRENCH_LANGUAGE_CODES = ['fr', 'fre', 'fr-FR', 'fr-CA', 'fr-CQ', 'fra']
+
 
 @dataclass
 class VideoFile:
@@ -366,7 +374,7 @@ class VideoConverter:
                 '-analyzeduration', str(FFPROBE_ANALYZE_DURATION),
                 '-probesize', str(FFPROBE_PROBE_SIZE),
                 '-select_streams', 'a',
-                '-show_entries', 'stream=index,codec_name',
+                '-show_entries', 'stream=index,codec_name,bit_rate',
                 '-show_entries', 'stream_tags=language',
                 '-of', 'json',
                 file_path
@@ -385,13 +393,44 @@ class VideoConverter:
                     audio_info = {
                         'index': len(audio_streams),  # Index audio 0-based pour FFmpeg
                         'codec': stream.get('codec_name', ''),
-                        'language': stream.get('tags', {}).get('language', '')
+                        'language': stream.get('tags', {}).get('language', ''),
+                        'bit_rate': stream.get('bit_rate')
                     }
                     audio_streams.append(audio_info)
             return audio_streams
         except Exception as e:
             self.logger.error(f"Erreur lors de la récupération des pistes audio pour {file_path}: {e}")
             return []
+    
+    def has_french_audio(self, audio_streams: List[Dict]) -> bool:
+        """Vérifie si une des pistes audio est en français."""
+        for audio in audio_streams:
+            lang = audio.get('language', '').lower()
+            # Vérifier si le langage contient un des codes français
+            for french_code in FRENCH_LANGUAGE_CODES:
+                if french_code in lang:
+                    return True
+        return False
+    
+    def should_reencode_audio(self, audio_streams: List[Dict]) -> bool:
+        """Détermine si l'audio doit être ré-encodé en AAC."""
+        if self.has_french_audio(audio_streams):
+            return False
+        
+        # Si pas de français, vérifier si on a une seule piste avec un bitrate supérieur à 128k
+        if len(audio_streams) == 1:
+            audio = audio_streams[0]
+            bit_rate = audio.get('bit_rate')
+            if bit_rate:
+                try:
+                    # Convertir en kbps
+                    bitrate_kbps = int(bit_rate) / 1000
+                    # Ré-encoder si le bitrate est supérieur à 128k
+                    if bitrate_kbps > 128:
+                        return True
+                except ValueError:
+                    pass
+        return False
     
     def get_subtitle_streams_info(self, file_path: str) -> List[Dict]:
         """Récupère les informations des pistes de sous-titres via ffprobe."""
@@ -511,6 +550,10 @@ class VideoConverter:
         # Générer le chemin de sortie (gère l'extension MKV si MP4 + H.264)
         output_path = self._generate_output_path(video_file.path, video_file.codec)
         
+        # Vérifier les pistes audio pour le re-encodage
+        audio_streams = self.get_audio_streams_info(video_file.path)
+        reencode_audio = self.should_reencode_audio(audio_streams)
+        
         # Vérifier les sous-titres et exclure ceux non supportés
         subtitle_streams = self.get_subtitle_streams_info(video_file.path)
         map_cmd = ['-map', '0']  # Par défaut, on map tout
@@ -530,10 +573,25 @@ class VideoConverter:
         # FFmpeg ne peut encoder que text->text ou bitmap->bitmap
         subtitle_copy_cmd = ['-c:s', 'copy']
         
+        # Configurer l'audio : copy par défaut, ou ré-encoder en AAC si nécessaire
+        if reencode_audio:
+            audio_params = ['-c:a', AAC_CODEC, '-b:a', AAC_BITRATE, '-ac', str(AAC_CHANNELS)]
+            self.logger.info("Ré-encodage audio en AAC 128kbps stéréo (pas de piste française détectée)")
+        else:
+            audio_params = ['-c:a', 'copy']
+        
+        # Remplacer le paramètre -c:a dans FFMPEG_HEVC_PARAMS
+        hevc_params = []
+        for param in FFMPEG_HEVC_PARAMS:
+            if param == '-c:a':
+                continue  # On gère l'audio séparément
+            hevc_params.append(param)
+        
         cmd = [
             'ffmpeg',
             '-i', video_file.path,
-            *FFMPEG_HEVC_PARAMS,
+            *hevc_params,
+            *audio_params,
             *map_cmd,
             *subtitle_copy_cmd,
             '-y',  # Écrase le fichier de sortie si il existe
