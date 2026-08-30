@@ -67,7 +67,7 @@ AAC_CHANNELS = 2  # Stéréo
 AAC_CODEC = 'aac'
 
 # Liste des langages Français acceptés
-FRENCH_LANGUAGE_CODES = ['fr', 'fre', 'fr-FR', 'fr-CA', 'fr-CQ', 'fra']
+FRENCH_LANGUAGE_CODES = ['fr', 'fre', 'fr-FR', 'fr-CA', 'fr-QC', 'fra']
 
 
 @dataclass
