@@ -673,17 +673,18 @@ class VideoConverter:
                     continue  # On gère l'audio séparément
                 video_params.append(param)
         
-        # Ne pas traiter si pas de ré-encodage audio nécessaire et pas de suppression de pistes
-        # (c'est-à-dire si on a des pistes FR et pas de non-FR à supprimer)
-        if not reencode_audio and not audio_indices_to_process:
-            self.logger.info("Aucun traitement audio nécessaire, fichier ignoré")
+        # Ne pas traiter si pas de ré-encodage audio nécessaire, pas de suppression de pistes,
+        # ET pas de conversion vidéo nécessaire (déjà HEVC/AV1)
+        # Pour H.264, on doit TOUJOURS convertir la vidéo même si l'audio ne nécessite pas de traitement
+        if not is_modern_codec and not reencode_audio and not audio_indices_to_process:
+            self.logger.info("Aucun traitement nécessaire (vidéo déjà moderne et audio OK)")
             return ConversionResult(
                 original_file=video_file.path,
                 converted_file=output_path,
                 original_size=video_file.size,
                 converted_size=0,
                 success=False,
-                error_message="Pas de traitement audio nécessaire (bitrate <= 128kbps ou pistes FR présentes)"
+                error_message="Pas de traitement nécessaire (vidéo déjà moderne et audio OK)"
             )
         
         cmd = [
