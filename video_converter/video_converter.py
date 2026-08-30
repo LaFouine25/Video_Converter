@@ -455,16 +455,35 @@ class VideoConverter:
         
         Retourne:
         - (False, non_french_indices) si au moins une piste FR existe : supprimer les non-FR sans réencodage
-        - (True, all_indices) si aucune piste FR : réencoder TOUTES les pistes en AAC
+        - (True, all_indices) si aucune piste FR ET bitrate > 128kbps : réencoder TOUTES les pistes en AAC
+        - (False, []) si aucune piste FR mais bitrate <= 128kbps : ne rien faire
         """
         if self.has_french_audio(audio_streams):
             # Supprimer les pistes non-FR, garder les FR en copy
             non_french_indices = self.get_non_french_audio_indices(audio_streams)
             return (False, non_french_indices)
         else:
-            # Réencoder TOUTES les pistes en AAC
-            all_indices = [audio['index'] for audio in audio_streams]
-            return (True, all_indices)
+            # Aucune piste FR : vérifier le bitrate de chaque piste
+            # Ré-encoder UNIQUEMENT si au moins une piste a un bitrate > 128kbps
+            has_high_bitrate = False
+            for audio in audio_streams:
+                bit_rate = audio.get('bit_rate')
+                if bit_rate:
+                    try:
+                        bitrate_kbps = int(bit_rate) / 1000
+                        if bitrate_kbps > 128:
+                            has_high_bitrate = True
+                            break
+                    except ValueError:
+                        pass
+            
+            if has_high_bitrate:
+                # Réencoder TOUTES les pistes en AAC
+                all_indices = [audio['index'] for audio in audio_streams]
+                return (True, all_indices)
+            else:
+                # Bitrate <= 128kbps, ne rien faire
+                return (False, [])
     
     def get_subtitle_streams_info(self, file_path: str) -> List[Dict]:
         """Récupère les informations des pistes de sous-titres via ffprobe."""
@@ -653,6 +672,19 @@ class VideoConverter:
                 if param == '-c:a':
                     continue  # On gère l'audio séparément
                 video_params.append(param)
+        
+        # Ne pas traiter si pas de ré-encodage audio nécessaire et pas de suppression de pistes
+        # (c'est-à-dire si on a des pistes FR et pas de non-FR à supprimer)
+        if not reencode_audio and not audio_indices_to_process:
+            self.logger.info("Aucun traitement audio nécessaire, fichier ignoré")
+            return ConversionResult(
+                original_file=video_file.path,
+                converted_file=output_path,
+                original_size=video_file.size,
+                converted_size=0,
+                success=False,
+                error_message="Pas de traitement audio nécessaire (bitrate <= 128kbps ou pistes FR présentes)"
+            )
         
         cmd = [
             'ffmpeg',
