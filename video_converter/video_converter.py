@@ -493,26 +493,26 @@ class VideoConverter:
                 '-v', 'error',
                 '-analyzeduration', str(FFPROBE_ANALYZE_DURATION),
                 '-probesize', str(FFPROBE_PROBE_SIZE),
-                '-show_entries', 'stream=index,codec_name,codec_type',
+                '-select_streams', 's',  # <-- Sélectionne UNIQUEMENT les sous-titres
+                '-show_entries', 'stream=codec_name',
                 '-show_entries', 'stream_tags=language',
                 '-of', 'json',
                 file_path
             ]
-            
+
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             data = json.loads(result.stdout)
-            
+
             subtitle_streams = []
             if data.get('streams'):
-                for stream in data['streams']:
-                    # Ne prendre que les streams de type subtitle
-                    if stream.get('codec_type') == 'subtitle':
-                        subtitle_info = {
-                            'index': stream.get('index'),
-                            'codec': stream.get('codec_name', ''),
-                            'language': stream.get('tags', {}).get('language', '')
-                        }
-                        subtitle_streams.append(subtitle_info)
+                for idx, stream in enumerate(data['streams']):
+                    # idx est l'index parmi les SOUS-TITRES (0-based)
+                    subtitle_info = {
+                        'index': idx,  # Index local pour -map 0:s:0, -map 0:s:1, etc.
+                        'codec': stream.get('codec_name', ''),
+                        'language': stream.get('tags', {}).get('language', '')
+                    }
+                    subtitle_streams.append(subtitle_info)
             return subtitle_streams
         except Exception as e:
             self.logger.error(f"Erreur lors de la récupération des pistes de sous-titres pour {file_path}: {e}")
@@ -640,22 +640,23 @@ class VideoConverter:
                     continue
             map_cmd.extend(['-map', f'0:a:{audio["index"]}'])
         
-        # Map les sous-titres supportés
+        # Map les sous-titres supportés (supprimer subtitle_copy_cmd)
         for subtitle in subtitle_streams:
             codec = subtitle.get('codec', '')
-            # Exclure les codecs non standard (numériques) et les codecs bitmap
+            # Exclure les codecs non supportés (numériques, PGS, HDMV, etc.)
             if codec and (codec.isdigit() or 'pgs' in codec.lower() or 'hdmv' in codec.lower()):
                 self.logger.info(f"Exclusion du sous-titre non supporté (index {subtitle['index']}, codec: {subtitle['codec']})")
                 continue
-            # Inclure le sous-titre
-            if subtitle.get('index') is not None:
-                map_cmd.extend(['-map', f'0:s:{subtitle["index"]}?'])
-                self.logger.debug(f"Inclusion du sous-titre (index {subtitle['index']}, codec: {subtitle['codec']})")
+            # Inclure le sous-titre (corriger la syntaxe : supprimer le "?" )
+            map_cmd.extend(['-map', f'0:s:{subtitle["index"]}'])
+            self.logger.debug(f"Inclusion du sous-titre (index {subtitle['index']}, codec: {subtitle['codec']})")
         
         # Construire la commande FFmpeg - Étape 1: conversion simple
         # Ajouter la copie des sous-titres pour éviter le re-encodage
         # FFmpeg ne peut encoder que text->text ou bitmap->bitmap
-        subtitle_copy_cmd = ['-c:s', 'copy']
+        
+        # À SUPPRIMER :
+        # subtitle_copy_cmd = ['-c:s', 'copy']
         
         # Configurer l'audio
         if reencode_audio:
@@ -709,7 +710,7 @@ class VideoConverter:
             *video_params,
             *audio_params,
             *map_cmd,
-            *subtitle_copy_cmd,
+            # *subtitle_copy_cmd,
             '-y',  # Écrase le fichier de sortie si il existe
         ]
         
