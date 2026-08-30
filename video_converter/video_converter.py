@@ -621,24 +621,35 @@ class VideoConverter:
         
         # Vérifier les sous-titres et exclure ceux non supportés
         subtitle_streams = self.get_subtitle_streams_info(video_file.path)
-        map_cmd = ['-map', '0']  # Par défaut, on map tout
         
+        # Construire les maps explicitement au lieu d'utiliser -map 0 + exclusions
+        # Cela évite les problèmes avec les codecs non supportés
+        map_cmd = []
+        
+        # Map la vidéo (stream 0 par défaut)
+        map_cmd.extend(['-map', '0:v'])
+        
+        # Map les pistes audio valides
+        for audio in audio_streams:
+            # Exclure les pistes audio non-FR si on a des pistes FR
+            if not reencode_audio and audio_indices_to_process:
+                if audio['index'] in audio_indices_to_process:
+                    # C'est une piste non-FR à exclure
+                    self.logger.info(f"Suppression de la piste audio non-FR (index {audio['index']})")
+                    continue
+            map_cmd.extend(['-map', f'0:a:{audio["index"]}'])
+        
+        # Map les sous-titres supportés
         for subtitle in subtitle_streams:
-            # Exclure les sous-titres avec codec non supporté (comme 94213)
             codec = subtitle.get('codec', '')
-            # Exclure les codecs non standard (numériques) et les codecs bitmap comme HDMV_PGS
+            # Exclure les codecs non standard (numériques) et les codecs bitmap
             if codec and (codec.isdigit() or 'pgs' in codec.lower() or 'hdmv' in codec.lower()):
-                # C'est un codec non standard ou bitmap, l'exclure
-                if subtitle.get('index') is not None:
-                    map_cmd.extend(['-map', '-s:' + str(subtitle['index'])])
-                    self.logger.info(f"Exclusion du sous-titre non supporté (index {subtitle['index']}, codec: {subtitle['codec']})")
-        
-        # Gérer les pistes audio non françaises (à supprimer)
-        if not reencode_audio and audio_indices_to_process:
-            # Supprimer les pistes non-FR (conserver les FR)
-            for audio_index in audio_indices_to_process:
-                map_cmd.extend(['-map', '-a:' + str(audio_index)])
-                self.logger.info(f"Suppression de la piste audio non-FR (index {audio_index})")
+                self.logger.info(f"Exclusion du sous-titre non supporté (index {subtitle['index']}, codec: {subtitle['codec']})")
+                continue
+            # Inclure le sous-titre
+            if subtitle.get('index') is not None:
+                map_cmd.extend(['-map', f'0:s:{subtitle["index"]}'])
+                self.logger.debug(f"Inclusion du sous-titre (index {subtitle['index']}, codec: {subtitle['codec']})")
         
         # Construire la commande FFmpeg - Étape 1: conversion simple
         # Ajouter la copie des sous-titres pour éviter le re-encodage
