@@ -43,7 +43,7 @@ FFMPEG_HEVC_PARAMS = [
     "-tune", "hq",
     "-rc", "constqp",
     "-qp", "23",
-    "-profile", "main10",
+    "-profile:v", "main10",
     "-c:a", "copy"
 ]
 
