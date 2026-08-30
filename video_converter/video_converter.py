@@ -668,9 +668,14 @@ class VideoConverter:
         else:
             # Remplacer le paramètre -c:a dans FFMPEG_HEVC_PARAMS
             video_params = []
+            skip_next = False
             for param in FFMPEG_HEVC_PARAMS:
+                if skip_next:
+                    skip_next = False
+                    continue
                 if param == '-c:a':
-                    continue  # On gère l'audio séparément
+                    skip_next = True  # Sauter aussi la valeur 'copy' qui suit
+                    continue
                 video_params.append(param)
         
         # Ne pas traiter UNIQUEMENT si c'est un codec moderne (HEVC/AV1) ET pas de traitement audio nécessaire
