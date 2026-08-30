@@ -493,8 +493,7 @@ class VideoConverter:
                 '-v', 'error',
                 '-analyzeduration', str(FFPROBE_ANALYZE_DURATION),
                 '-probesize', str(FFPROBE_PROBE_SIZE),
-                '-select_streams', 's',
-                '-show_entries', 'stream=index,codec_name',
+                '-show_entries', 'stream=index,codec_name,codec_type',
                 '-show_entries', 'stream_tags=language',
                 '-of', 'json',
                 file_path
@@ -506,12 +505,14 @@ class VideoConverter:
             subtitle_streams = []
             if data.get('streams'):
                 for stream in data['streams']:
-                    subtitle_info = {
-                        'index': stream.get('index'),
-                        'codec': stream.get('codec_name', ''),
-                        'language': stream.get('tags', {}).get('language', '')
-                    }
-                    subtitle_streams.append(subtitle_info)
+                    # Ne prendre que les streams de type subtitle
+                    if stream.get('codec_type') == 'subtitle':
+                        subtitle_info = {
+                            'index': stream.get('index'),
+                            'codec': stream.get('codec_name', ''),
+                            'language': stream.get('tags', {}).get('language', '')
+                        }
+                        subtitle_streams.append(subtitle_info)
             return subtitle_streams
         except Exception as e:
             self.logger.error(f"Erreur lors de la récupération des pistes de sous-titres pour {file_path}: {e}")
@@ -648,7 +649,7 @@ class VideoConverter:
                 continue
             # Inclure le sous-titre
             if subtitle.get('index') is not None:
-                map_cmd.extend(['-map', f'0:s:{subtitle["index"]}'])
+                map_cmd.extend(['-map', f'0:s:{subtitle["index"]}?'])
                 self.logger.debug(f"Inclusion du sous-titre (index {subtitle['index']}, codec: {subtitle['codec']})")
         
         # Construire la commande FFmpeg - Étape 1: conversion simple
