@@ -694,8 +694,14 @@ class VideoConverter:
             *map_cmd,
             *subtitle_copy_cmd,
             '-y',  # Écrase le fichier de sortie si il existe
-            output_path
         ]
+        
+        # Si on utilise copy pour vidéo, audio ET sous-titres, forcer le format matroska
+        # Cela évite l'erreur "Unable to choose an output format for 'copy'"
+        if ('-c:v' in cmd and 'copy' in cmd) and ('-c:a' in cmd and 'copy' in cmd) and ('-c:s' in cmd and 'copy' in cmd):
+            cmd.extend(['-f', 'matroska'])
+        
+        cmd.append(output_path)
         
         self.logger.info(f"Conversion de {video_file.path} vers {output_path}")
         self.logger.info(f"Commande: {' '.join(cmd)}")
