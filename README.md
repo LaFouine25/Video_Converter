@@ -23,7 +23,7 @@ Script Python de conversion vidéo automatisée pour optimiser l'espace disque t
 - **Détection des codecs** vidéo (H.264/x264, HEVC/H.265, AV1)
 - **Conversion H.264 → HEVC** via FFmpeg avec encodage matériel (NVENC)
 - **Comparaison des tailles** avant/après conversion
-- **Seuil de réduction** : conservation du fichier original si la réduction est < 10%
+- **Seuil de réduction** : conservation du fichier original si la réduction est < 10% (ou < 2% pour le traitement uniquement audio)
 
 ### Gestion des pistes audio
 - **Détection des langues** audio (français, anglais, etc.)
@@ -133,6 +133,7 @@ FRENCH_LANGUAGE_CODES = ['fr', 'fre', 'fr-FR', 'fr-CA', 'fr-CQ', 'fra']
 #### Seuil de réduction
 ```python
 SIZE_REDUCTION_THRESHOLD = 0.10  # 10%
+SIZE_REDUCTION_THRESHOLD_AUDIO_ONLY = 0.02  # 2% (traitement uniquement audio)
 ```
 
 #### Analyse FFprobe

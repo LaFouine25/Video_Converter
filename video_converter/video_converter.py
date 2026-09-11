@@ -50,6 +50,10 @@ FFMPEG_HEVC_PARAMS = [
 # Seuil de réduction de taille (10%)
 SIZE_REDUCTION_THRESHOLD = 0.10
 
+# Seuil de réduction de taille pour le traitement uniquement audio (2%)
+# Utilisé lorsqu'on supprime les pistes audio non-FR sans ré-encodage de la vidéo
+SIZE_REDUCTION_THRESHOLD_AUDIO_ONLY = 0.02
+
 # Seuil minimal d'espace disque disponible (10%)
 MIN_DISK_SPACE_THRESHOLD = 0.10
 
@@ -93,6 +97,7 @@ class ConversionResult:
     converted_size: int
     success: bool
     error_message: Optional[str] = None
+    audio_only_processing: bool = False
     
     def size_reduction(self) -> float:
         """Calcule le pourcentage de réduction de taille."""
@@ -744,12 +749,17 @@ class VideoConverter:
             
             converted_size = os.path.getsize(output_path)
             
+            # Déterminer si cette conversion est un traitement uniquement audio
+            # (codec moderne avec vidéo copiée + suppression de pistes audio non-FR)
+            audio_only = is_modern_codec and not reencode_audio and bool(audio_indices_to_process)
+            
             return ConversionResult(
                 original_file=video_file.path,
                 converted_file=output_path,
                 original_size=video_file.size,
                 converted_size=converted_size,
-                success=True
+                success=True,
+                audio_only_processing=audio_only
             )
             
         except subprocess.CalledProcessError as e:
@@ -803,10 +813,18 @@ class VideoConverter:
             return False
         
         # Vérifier la réduction de taille
+        # Pour le traitement uniquement audio (suppression de pistes non-FR sans ré-encodage vidéo),
+        # on utilise un seuil plus bas car la réduction attendue est faible
+        if result.audio_only_processing:
+            reduction_threshold = SIZE_REDUCTION_THRESHOLD_AUDIO_ONLY
+            threshold_label = "2%"
+        else:
+            reduction_threshold = SIZE_REDUCTION_THRESHOLD
+            threshold_label = "10%"
         reduction = result.size_reduction()
         self.logger.info(f"Réduction de taille: {reduction*100:.2f}% ({result.original_size} -> {result.converted_size} bytes)")
         
-        if reduction >= SIZE_REDUCTION_THRESHOLD:
+        if reduction >= reduction_threshold:
             # Remplacer l'original par le converti
             self._replace_original(result)
             
@@ -829,7 +847,7 @@ class VideoConverter:
             # Supprimer le fichier converti (réduction insuffisante)
             os.remove(result.converted_file)
             self.failed_files.add(abs_original)  # Marquer pour éviter de refaire
-            self.logger.info(f"Réduction insuffisante ({reduction*100:.2f}% < 10%), fichier original conservé")
+            self.logger.info(f"Réduction insuffisante ({reduction*100:.2f}% < {threshold_label}), fichier original conservé")
             return False
     
     def _replace_original(self, result: ConversionResult) -> None:
