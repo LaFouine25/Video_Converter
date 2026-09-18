@@ -89,6 +89,34 @@ python video_converter.py
 python video_converter.py mon_config.conf
 ```
 
+### Réduire la résolution d'un cran (`-R`)
+
+Par défaut, la conversion H.264 → HEVC conserve la résolution d'origine (un film 1080p reste 1080p, un 4K reste 4K).
+
+L'option **`-R`** (reduce) force une réduction d'un cran vers le bas parmi les résolutions standard :
+
+| Résolution source | Résolution cible |
+|-------------------|------------------|
+| 4K (3840×2160)    | 1080p (1920×1080) |
+| 1080p (1920×1080) | 720p (1280×720)   |
+| 720p (1280×720)   | inchangée (déjà minimale) |
+
+L'option `-R` est **uniquement accessible en ligne de commande** et peut être placée n'importe où parmi les arguments :
+
+```bash
+# Cible un répertoire en réduisant la résolution
+python video_converter.py -R /chemin/vers/videos
+python video_converter.py /chemin/vers/videos -R
+
+# Config personnalisée + cible + réduction
+python video_converter.py mon_config.conf -R /chemin/vers/videos
+```
+
+Notes :
+- `-R` n'a d'effet que sur la vidéo ré-encodée (H.264 → HEVC). Les fichiers déjà en HEVC/AV1 conservent leur résolution (la vidéo est copiée sans ré-encodage).
+- Un fichier déjà en 720p (ou plus bas) n'est pas réduit.
+- Une résolution intermédiaire (ex. 1440p) est rabaissée au cran standard immédiatement inférieur.
+
 ### Exemple de sortie
 ```
 2024-01-15 10:30:00 - INFO - Configuration chargée depuis video_converter.conf
