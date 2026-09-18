@@ -73,6 +73,14 @@ AAC_CODEC = 'aac'
 # Liste des langages Français acceptés
 FRENCH_LANGUAGE_CODES = ['fr', 'fre', 'fr-FR', 'fr-CA', 'fr-QC', 'fra']
 
+# Résolutions standard ordonnées de la plus haute à la plus basse (largeur en pixels)
+# Utilisées par l'option -R pour réduire la résolution d'un cran
+RESOLUTION_ORDER = [
+    (3840, 2160),   # 4K (UHD)
+    (1920, 1080),   # 1080p (Full HD)
+    (1280, 720),     # 720p (HD)
+]
+
 
 @dataclass
 class VideoFile:
@@ -111,7 +119,8 @@ class VideoConverter:
     
     def __init__(self, config_file: str = DEFAULT_CONFIG_FILE, 
                  log_file: str = DEFAULT_LOG_FILE, 
-                 target_path: Optional[str] = None):
+                 target_path: Optional[str] = None,
+                 reduce_resolution: bool = False):
         self.config_file = config_file
         self.log_file = log_file
         self.config: Dict = {}
@@ -119,6 +128,7 @@ class VideoConverter:
         self.converted_files: set = set()
         self.keep_backup: bool = True  # Valeur par défaut
         self.process_audio_for_modern_codecs: bool = False  # Valeur par défaut
+        self.reduce_resolution: bool = reduce_resolution  # -R : réduire la résolution d'un cran
         self.target_path = target_path  # Fichier ou répertoire cible
         self._setup_logging()
         
@@ -185,6 +195,7 @@ class VideoConverter:
             
             self.logger.info(f"Conserver les backups: {self.keep_backup}")
             self.logger.info(f"Traiter l'audio des fichiers HEVC/AV1: {self.process_audio_for_modern_codecs}")
+            self.logger.info(f"Réduire la résolution d'un cran (-R): {self.reduce_resolution}")
             
             self.logger.info(f"Configuration chargée depuis {self.config_file}")
             self.logger.info(f"Répertoires à scanner: {', '.join(self.config['directories'])}")
@@ -613,6 +624,34 @@ class VideoConverter:
 
 
     
+    def compute_reduced_resolution(self, video_file: VideoFile) -> Optional[Tuple[int, int]]:
+        """Calcule la résolution cible (un cran en dessous) pour l'option -R.
+        
+        Les résolutions standard sont : 4K (3840x2160), 1080p (1920x1080), 720p (1280x720).
+        Retourne la résolution cible (width, height) ou None si aucune réduction possible
+        (par exemple un fichier déjà en 720p ou plus bas, ou résolution inconnue).
+        """
+        if not self.reduce_resolution:
+            return None
+        if not video_file.width or not video_file.height:
+            self.logger.warning(f"Résolution inconnue pour {video_file.path}, aucune réduction appliquée")
+            return None
+
+        # Déterminer le cran actuel à partir de la hauteur (plus robuste que la largeur)
+        current_height = video_file.height
+        target = None
+        for i, (w, h) in enumerate(RESOLUTION_ORDER):
+            if i < len(RESOLUTION_ORDER) - 1 and current_height >= h:
+                target = RESOLUTION_ORDER[i + 1]
+                break
+
+        if target is None:
+            self.logger.info(f"Résolution déjà minimale ({current_height}p), aucune réduction possible: {video_file.path}")
+            return None
+
+        self.logger.info(f"Réduction de résolution: {video_file.width}x{video_file.height} -> {target[0]}x{target[1]}")
+        return target
+
     def convert_to_hevc(self, video_file: VideoFile) -> ConversionResult:
         """Convertit un fichier vidéo en HEVC avec correction des pistes audio et exclusion des sous-titres non supportés."""
         # Vérifier si c'est un codec moderne (HEVC/AV1) avec traitement audio uniquement
@@ -709,9 +748,18 @@ class VideoConverter:
                 error_message="Pas de traitement nécessaire (vidéo déjà moderne et audio OK)"
             )
         
+        # Option -R : ajouter un filtre de mise à l'échelle pour réduire la résolution d'un cran
+        # Uniquement pour la vidéo ré-encodée (pas pour les codecs modernes copiés)
+        filter_cmd = []
+        if not is_modern_codec and self.reduce_resolution:
+            reduced = self.compute_reduced_resolution(video_file)
+            if reduced:
+                filter_cmd = ['-vf', f'scale={reduced[0]}:{reduced[1]}']
+
         cmd = [
             'ffmpeg',
             '-i', video_file.path,
+            *filter_cmd,
             *video_params,
             *audio_params,
             *map_cmd,
@@ -980,18 +1028,24 @@ def main():
     config_file = DEFAULT_CONFIG_FILE
     log_file = DEFAULT_LOG_FILE
     target_path = None
-    
-    # Si des arguments sont fournis
-    if len(sys.argv) > 1:
-        first_arg = sys.argv[1]
+    reduce_resolution = False
+
+    # Récupérer les options indépendamment de leur position
+    args = [a for a in sys.argv[1:] if a != '-R']
+    if '-R' in sys.argv[1:]:
+        reduce_resolution = True
+
+    # Si des arguments positionnels sont fournis
+    if len(args) > 0:
+        first_arg = args[0]
         
         # Vérifier si c'est un fichier de configuration
         if first_arg.endswith('.conf') or first_arg.endswith('.json'):
             config_file = first_arg
             log_file = os.path.splitext(first_arg)[0] + ".log"
             # Vérifier s'il y a un second argument (fichier/répertoire cible)
-            if len(sys.argv) > 2:
-                target_path = sys.argv[2]
+            if len(args) > 1:
+                target_path = args[1]
         else:
             # C'est un fichier ou répertoire cible
             target_path = first_arg
@@ -1002,9 +1056,11 @@ def main():
     print(f"Utilisation de la configuration: {config_file}")
     if target_path:
         print(f"Cible: {target_path}")
+    if reduce_resolution:
+        print("Option -R activée: réduction de résolution d'un cran (4K->1080, 1080->720)")
     print(f"Fichier de log: {log_file}")
     
-    converter = VideoConverter(config_file, log_file, target_path)
+    converter = VideoConverter(config_file, log_file, target_path, reduce_resolution)
     converter.run()
 
 
