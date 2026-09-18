@@ -657,6 +657,13 @@ class VideoConverter:
         # Vérifier si c'est un codec moderne (HEVC/AV1) avec traitement audio uniquement
         is_modern_codec = video_file.codec.lower() in ['hevc', 'h265', 'av1']
         
+        # Option -R : calculer la résolution cible (un cran en dessous) une seule fois.
+        # will_reduce_resolution indique si la vidéo sera ré-encodée à une résolution inférieure.
+        # Pour les codecs modernes (HEVC/AV1), cela nà d'effet que si process_audio_for_modern_codecs
+        # est activé (sinon le fichier n'arrive pas jusqu'ici via needs_conversion).
+        reduced = self.compute_reduced_resolution(video_file)
+        will_reduce_resolution = reduced is not None
+        
         # Générer le chemin de sortie (gère l'extension MKV si MP4 + H.264)
         output_path = self._generate_output_path(video_file.path, video_file.codec)
         
@@ -717,14 +724,9 @@ class VideoConverter:
         else:
             audio_params = ['-c:a', 'copy']
         
-        # Pour les codecs modernes (HEVC/AV1), on ne convertit pas la vidéo
-        if is_modern_codec:
-            # Copier la vidéo sans ré-encodage
-            video_params = ['-c:v', 'copy']
-            self.logger.info(f"Copie de la vidéo {video_file.codec.upper()} sans conversion")
-        else:
-            # Remplacer le paramètre -c:a dans FFMPEG_HEVC_PARAMS
-            video_params = []
+        # Paramétres d'encodage HEVC sans la partie audio (-c:a est géré séparément)
+        def build_hevc_video_params():
+            params = []
             skip_next = False
             for param in FFMPEG_HEVC_PARAMS:
                 if skip_next:
@@ -733,11 +735,26 @@ class VideoConverter:
                 if param == '-c:a':
                     skip_next = True  # Sauter aussi la valeur 'copy' qui suit
                     continue
-                video_params.append(param)
+                params.append(param)
+            return params
+
+        # Pour les codecs modernes (HEVC/AV1), on copie la vidéo sauf si -R demande une réduction
+        if is_modern_codec:
+            if will_reduce_resolution:
+                # Ré-encoder la vidéo HEVC/AV1 à la résolution réduite (le scale n'est pas possible avec -c:v copy)
+                video_params = build_hevc_video_params()
+                self.logger.info(f"Ré-encodage de la vidéo {video_file.codec.upper()} avec réduction de résolution (-R)")
+            else:
+                # Copier la vidéo sans ré-encodage
+                video_params = ['-c:v', 'copy']
+                self.logger.info(f"Copie de la vidéo {video_file.codec.upper()} sans conversion")
+        else:
+            # H.264 -> HEVC (ré-encodage)
+            video_params = build_hevc_video_params()
         
         # Ne pas traiter UNIQUEMENT si c'est un codec moderne (HEVC/AV1) ET pas de traitement audio nécessaire
         # Pour H.264, on doit TOUJOURS convertir la vidéo
-        if is_modern_codec and not reencode_audio and not audio_indices_to_process:
+        if is_modern_codec and not reencode_audio and not audio_indices_to_process and not will_reduce_resolution:
             self.logger.info("Aucun traitement nécessaire (vidéo déjà moderne et audio OK)")
             return ConversionResult(
                 original_file=video_file.path,
@@ -749,12 +766,10 @@ class VideoConverter:
             )
         
         # Option -R : ajouter un filtre de mise à l'échelle pour réduire la résolution d'un cran
-        # Uniquement pour la vidéo ré-encodée (pas pour les codecs modernes copiés)
+        # Uniquement pour la vidéo ré-encodée (H.264, ou HEVC/AV1 si -R est actif)
         filter_cmd = []
-        if not is_modern_codec and self.reduce_resolution:
-            reduced = self.compute_reduced_resolution(video_file)
-            if reduced:
-                filter_cmd = ['-vf', f'scale={reduced[0]}:{reduced[1]}']
+        if will_reduce_resolution:
+            filter_cmd = ['-vf', f'scale={reduced[0]}:{reduced[1]}']
 
         cmd = [
             'ffmpeg',
@@ -799,7 +814,8 @@ class VideoConverter:
             
             # Déterminer si cette conversion est un traitement uniquement audio
             # (codec moderne avec vidéo copiée + suppression de pistes audio non-FR)
-            audio_only = is_modern_codec and not reencode_audio and bool(audio_indices_to_process)
+            # Si -R ré-encode la vidéo, ce n'est plus un traitement uniquement audio
+            audio_only = is_modern_codec and not will_reduce_resolution and not reencode_audio and bool(audio_indices_to_process)
             
             return ConversionResult(
                 original_file=video_file.path,
