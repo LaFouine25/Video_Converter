@@ -113,7 +113,8 @@ python video_converter.py mon_config.conf -R /chemin/vers/videos
 ```
 
 Notes :
-- `-R` n'a d'effet que sur la vidéo ré-encodée (H.264 → HEVC). Les fichiers déjà en HEVC/AV1 conservent leur résolution (la vidéo est copiée sans ré-encodage).
+- `-R` s'applique à toute vidéo **ré-encodée** : H.264 → HEVC, et aussi HEVC/AV1 → HEVC lorsque `process_audio_for_modern_codecs` est activé dans la configuration (le fichier arrive alors dans le pipeline de conversion). Sans cette option, les fichiers déjà en HEVC/AV1 ne sont pas traités et ne sont donc pas affectés par `-R`.
+- Réduire la résolution d'un fichier HEVC/AV1 nécessite de **ré-encoder** la vidéo (impossible avec `-c:v copy`), donc la conversion est plus longue.
 - Un fichier déjà en 720p (ou plus bas) n'est pas réduit.
 - Une résolution intermédiaire (ex. 1440p) est rabaissée au cran standard immédiatement inférieur.
 
