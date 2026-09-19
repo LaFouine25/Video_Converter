@@ -129,6 +129,8 @@ Notes :
 2024-01-15 10:35:00 - INFO - Conversion terminée en 296.50 secondes
 2024-01-15 10:35:00 - INFO - Réduction de taille: 45.20% (15000000000 -> 8200000000 bytes)
 2024-01-15 10:35:01 - INFO - Fichier converti avec succès et remplacé
+2024-01-15 10:35:01 - INFO - Avancement: 1/25 fichiers traités/analysés, 24 restant(s) à traiter
+2024-01-15 10:35:02 - INFO - Traitement de: /videos/movies/movie2.mkv
 ...
 2024-01-15 11:30:00 - INFO - RESUME DE LA CONVERSION
 2024-01-15 11:30:00 - INFO - Durée totale: 0:59:59
