@@ -24,7 +24,7 @@ import subprocess
 import logging
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime
 
 
@@ -603,7 +603,7 @@ class VideoConverter:
                 cmd.extend(['-y', tmp_path])
                 
                 # Exécuter la correction
-                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                subprocess.run(cmd, capture_output=True, text=True, check=True)
                 
                 # Remplacer le fichier original par le temporaire
                 import shutil
@@ -612,7 +612,7 @@ class VideoConverter:
                 self.logger.info("Métadonnées audio corrigées avec succès")
                 return True
                 
-            except Exception as e:
+            except Exception:
                 # Nettoyer le fichier temporaire en cas d'erreur
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
