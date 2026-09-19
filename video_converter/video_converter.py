@@ -987,7 +987,12 @@ class VideoConverter:
         fail_count = 0
         skip_count = 0
         
+        total_files = len(h264_files)
+        processed_count = 0
+        
         for video_file in h264_files:
+            processed_count += 1
+            remaining_count = total_files - processed_count
             self.logger.info(f"\nTraitement de: {video_file.path}")
             self.logger.info(f"  Codec: {video_file.codec}")
             self.logger.info(f"  Taille: {video_file.size} bytes")
@@ -1002,6 +1007,11 @@ class VideoConverter:
                 self.logger.error(f"Erreur inattendue lors du traitement de {video_file.path}: {e}")
                 self.failed_files.add(os.path.abspath(video_file.path))
                 fail_count += 1
+            
+            self.logger.info(
+                f"Avancement: {processed_count}/{total_files} fichiers traités/analysés, "
+                f"{remaining_count} restant(s) à traiter"
+            )
         
         # Sauvegarder les marqueurs
         self.save_markers()
