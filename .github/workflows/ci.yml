@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: video_converter
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Vérifier la syntaxe (py_compile)
+        run: python3 -m py_compile video_converter.py
+
+      - name: Lint (pyflakes)
+        run: |
+          pip install pyflakes
+          pyflakes video_converter.py
+
+      - name: Tests (unittest)
+        run: python3 -m unittest discover -s tests -v

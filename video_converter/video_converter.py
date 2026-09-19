@@ -19,11 +19,12 @@ import sys
 import json
 import time
 import shutil
+import threading
 import subprocess
 import logging
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime
 
 
@@ -56,6 +57,9 @@ SIZE_REDUCTION_THRESHOLD_AUDIO_ONLY = 0.02
 
 # Seuil minimal d'espace disque disponible (10%)
 MIN_DISK_SPACE_THRESHOLD = 0.10
+
+# Intervalle d'affichage de l'avancement FFmpeg en secondes
+FFMPEG_PROGRESS_INTERVAL = 5.0
 
 # Paramètres ffprobe pour l'analyse des fichiers
 FFPROBE_ANALYZE_DURATION = 10000000  # 10MB
@@ -599,7 +603,7 @@ class VideoConverter:
                 cmd.extend(['-y', tmp_path])
                 
                 # Exécuter la correction
-                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                subprocess.run(cmd, capture_output=True, text=True, check=True)
                 
                 # Remplacer le fichier original par le temporaire
                 import shutil
@@ -608,7 +612,7 @@ class VideoConverter:
                 self.logger.info("Métadonnées audio corrigées avec succès")
                 return True
                 
-            except Exception as e:
+            except Exception:
                 # Nettoyer le fichier temporaire en cas d'erreur
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
@@ -651,6 +655,81 @@ class VideoConverter:
 
         self.logger.info(f"Réduction de résolution: {video_file.width}x{video_file.height} -> {target[0]}x{target[1]}")
         return target
+
+    @staticmethod
+    def _format_timedelta(seconds: float) -> str:
+        """Formate une durée en secondes en HH:MM:SS."""
+        seconds = int(seconds)
+        hours, remainder = divmod(seconds, 3600)
+        minutes, secs = divmod(remainder, 60)
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+    def _run_ffmpeg_with_progress(self, cmd: List[str], video_file: VideoFile) -> None:
+        """Exécute FFmpeg en affichant l'avancement de l'encodage en temps réel sur la console."""
+        # Ajouter le suivi d'avancement natif de FFmpeg sur stdout
+        full_cmd = [
+            'ffmpeg',
+            '-nostats',
+            '-loglevel', 'error',
+            *cmd[1:],
+            '-progress', 'pipe:1',
+        ]
+        
+        duration = video_file.duration
+        start_time = time.time()
+        last_display = 0.0
+        last_stderr = []
+        
+        process = subprocess.Popen(full_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        
+        def read_stderr():
+            for line in process.stderr:
+                last_stderr.append(line)
+        
+        stderr_thread = threading.Thread(target=read_stderr, daemon=True)
+        stderr_thread.start()
+        
+        out_time_us = None
+        try:
+            for line in process.stdout:
+                line = line.strip()
+                if line.startswith('out_time_us='):
+                    try:
+                        out_time_us = int(line.split('=', 1)[1])
+                    except ValueError:
+                        continue
+                elif line.startswith('progress='):
+                    now = time.time()
+                    if now - last_display >= FFMPEG_PROGRESS_INTERVAL or line.endswith('end'):
+                        if out_time_us is None:
+                            continue
+                        elapsed = out_time_us / 1_000_000
+                        if duration:
+                            percent = min(elapsed / duration * 100, 100.0)
+                            remaining = max(duration - elapsed, 0.0)
+                            print(
+                                f"\r  Encodage: {percent:5.1f}%  "
+                                f"[{self._format_timedelta(elapsed)} / {self._format_timedelta(duration)}]  "
+                                f"reste {self._format_timedelta(remaining)}",
+                                end='', flush=True
+                            )
+                        else:
+                            print(
+                                f"\r  Encodage en cours: {self._format_timedelta(elapsed)} trait\u00e9s",
+                                end='', flush=True
+                            )
+                        last_display = now
+            process.wait()
+        finally:
+            stderr_thread.join(timeout=5)
+        
+        elapsed_time = time.time() - start_time
+        
+        if process.returncode != 0:
+            stderr_tail = ''.join(last_stderr[-15:]).strip()
+            raise subprocess.CalledProcessError(process.returncode, full_cmd, stderr=stderr_tail)
+        
+        return elapsed_time
 
     def convert_to_hevc(self, video_file: VideoFile) -> ConversionResult:
         """Convertit un fichier vidéo en HEVC avec correction des pistes audio et exclusion des sous-titres non supportés."""
@@ -793,10 +872,8 @@ class VideoConverter:
         self.logger.info(f"Commande: {' '.join(cmd)}")
         
         try:
-            start_time = time.time()
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            elapsed_time = time.time() - start_time
-            
+            elapsed_time = self._run_ffmpeg_with_progress(cmd, video_file)
+            print()  # Termine la ligne d'avancement
             self.logger.info(f"Conversion terminée en {elapsed_time:.2f} secondes")
             
             # Vérifier que le fichier de sortie existe

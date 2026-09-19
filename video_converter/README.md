@@ -9,6 +9,7 @@ Script Python pour convertir automatiquement les fichiers vidéo H.264 en HEVC a
 - 🎯 Identification des codecs vidéo (H.264, HEVC, AV1)
 - ⚡ Conversion H.264 → HEVC via FFmpeg avec NVENC
 - 📊 Comparaison des tailles avant/après conversion
+- 🔄 Affichage de l'avancement de l'encodage en temps réel (%, temps traité, temps restant)
 - ✅ Conservation uniquement si réduction ≥ 10%
 - 🚫 Marquage des fichiers échoués pour éviter les retraitements
 - 📝 Journalisation complète
@@ -130,7 +131,8 @@ Notes :
 2024-01-15 10:35:00 - INFO - Réduction de taille: 45.20% (15000000000 -> 8200000000 bytes)
 2024-01-15 10:35:01 - INFO - Fichier converti avec succès et remplacé
 2024-01-15 10:35:01 - INFO - Avancement: 1/25 fichiers traités/analysés, 24 restant(s) à traiter
-2024-01-15 10:35:02 - INFO - Traitement de: /videos/movies/movie2.mkv
+  Encodage:  42.7%  [00:12:35 / 00:29:30]  reste 00:16:55
+2024-01-15 10:40:02 - INFO - Traitement de: /videos/movies/movie2.mkv
 ...
 2024-01-15 11:30:00 - INFO - RESUME DE LA CONVERSION
 2024-01-15 11:30:00 - INFO - Durée totale: 0:59:59
