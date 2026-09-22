@@ -543,6 +543,23 @@ class VideoConverter:
             self.logger.error(f"Erreur lors de la récupération des pistes de sous-titres pour {file_path}: {e}")
             return []
     
+    def _build_subtitle_map_cmd(self, subtitle_streams: List[Dict]) -> List[str]:
+        """Construit les options -map des sous-titres en excluant les flux non supportés.
+
+        Sont exclus : les sous-titres image (PGS/HDMV), les codecs numériques
+        et les flux à codec inconnu/vide (sinon ffmpeg échoue avec
+        "Decoding requested, but no decoder found for: none").
+        """
+        map_cmd = []
+        for subtitle in subtitle_streams:
+            codec = subtitle.get('codec', '')
+            if not codec or codec.isdigit() or 'pgs' in codec.lower() or 'hdmv' in codec.lower():
+                self.logger.info(f"Exclusion du sous-titre non supporté (index {subtitle['index']}, codec: {codec or 'inconnu'})")
+                continue
+            map_cmd.extend(['-map', f'0:s:{subtitle["index"]}'])
+            self.logger.debug(f"Inclusion du sous-titre (index {subtitle['index']}, codec: {subtitle['codec']})")
+        return map_cmd
+    
     def needs_conversion(self, video_file: VideoFile) -> bool:
         """Détermine si un fichier doit être converti."""
         if video_file.codec is None:
@@ -775,16 +792,8 @@ class VideoConverter:
                     continue
             map_cmd.extend(['-map', f'0:a:{audio["index"]}'])
         
-        # Map les sous-titres supportés (supprimer subtitle_copy_cmd)
-        for subtitle in subtitle_streams:
-            codec = subtitle.get('codec', '')
-            # Exclure les codecs non supportés (numériques, PGS, HDMV, etc.)
-            if codec and (codec.isdigit() or 'pgs' in codec.lower() or 'hdmv' in codec.lower()):
-                self.logger.info(f"Exclusion du sous-titre non supporté (index {subtitle['index']}, codec: {subtitle['codec']})")
-                continue
-            # Inclure le sous-titre (corriger la syntaxe : supprimer le "?" )
-            map_cmd.extend(['-map', f'0:s:{subtitle["index"]}'])
-            self.logger.debug(f"Inclusion du sous-titre (index {subtitle['index']}, codec: {subtitle['codec']})")
+        # Map les sous-titres supportés via la méthode dédiée
+        map_cmd.extend(self._build_subtitle_map_cmd(subtitle_streams))
         
         # Construire la commande FFmpeg - Étape 1: conversion simple
         # Ajouter la copie des sous-titres pour éviter le re-encodage
