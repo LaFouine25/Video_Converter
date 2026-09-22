@@ -124,7 +124,8 @@ class VideoConverter:
     def __init__(self, config_file: str = DEFAULT_CONFIG_FILE, 
                  log_file: str = DEFAULT_LOG_FILE, 
                  target_path: Optional[str] = None,
-                 reduce_resolution: bool = False):
+                 reduce_resolution: bool = False,
+                 force_scan: bool = False):
         self.config_file = config_file
         self.log_file = log_file
         self.config: Dict = {}
@@ -133,6 +134,7 @@ class VideoConverter:
         self.keep_backup: bool = True  # Valeur par défaut
         self.process_audio_for_modern_codecs: bool = False  # Valeur par défaut
         self.reduce_resolution: bool = reduce_resolution  # -R : réduire la résolution d'un cran
+        self.force_scan: bool = force_scan  # -F : forcer le scan même des fichiers déjà traités
         self.target_path = target_path  # Fichier ou répertoire cible
         self._setup_logging()
         
@@ -200,6 +202,7 @@ class VideoConverter:
             self.logger.info(f"Conserver les backups: {self.keep_backup}")
             self.logger.info(f"Traiter l'audio des fichiers HEVC/AV1: {self.process_audio_for_modern_codecs}")
             self.logger.info(f"Réduire la résolution d'un cran (-R): {self.reduce_resolution}")
+            self.logger.info(f"Forcer le scan des fichiers déjà traités (-F): {self.force_scan}")
             
             self.logger.info(f"Configuration chargée depuis {self.config_file}")
             self.logger.info(f"Répertoires à scanner: {', '.join(self.config['directories'])}")
@@ -277,11 +280,12 @@ class VideoConverter:
                         ext = os.path.splitext(file)[1].lower()
                         
                         if ext in VIDEO_EXTENSIONS:
-                            # Vérifier si le fichier est déjà marqué
-                            abs_path = os.path.abspath(file_path)
-                            if abs_path in self.failed_files or abs_path in self.converted_files:
-                                self.logger.debug(f"Fichier déjà traité: {file_path}")
-                                continue
+                            # Vérifier si le fichier est déjà marqué (sauf si -F)
+                            if not self.force_scan:
+                                abs_path = os.path.abspath(file_path)
+                                if abs_path in self.failed_files or abs_path in self.converted_files:
+                                    self.logger.debug(f"Fichier déjà traité: {file_path}")
+                                    continue
                             
                             video_file = self._create_video_file(file_path)
                             if video_file:
@@ -303,11 +307,12 @@ class VideoConverter:
                         ext = os.path.splitext(file)[1].lower()
                         
                         if ext in VIDEO_EXTENSIONS:
-                            # Vérifier si le fichier est déjà marqué
-                            abs_path = os.path.abspath(file_path)
-                            if abs_path in self.failed_files or abs_path in self.converted_files:
-                                self.logger.debug(f"Fichier déjà traité: {file_path}")
-                                continue
+                            # Vérifier si le fichier est déjà marqué (sauf si -F)
+                            if not self.force_scan:
+                                abs_path = os.path.abspath(file_path)
+                                if abs_path in self.failed_files or abs_path in self.converted_files:
+                                    self.logger.debug(f"Fichier déjà traité: {file_path}")
+                                    continue
                             
                             video_file = self._create_video_file(file_path)
                             if video_file:
@@ -1132,11 +1137,15 @@ def main():
     log_file = DEFAULT_LOG_FILE
     target_path = None
     reduce_resolution = False
+    force_scan = False
 
     # Récupérer les options indépendamment de leur position
-    args = [a for a in sys.argv[1:] if a != '-R']
-    if '-R' in sys.argv[1:]:
+    raw_args = sys.argv[1:]
+    if '-R' in raw_args:
         reduce_resolution = True
+    if '-F' in raw_args:
+        force_scan = True
+    args = [a for a in raw_args if a not in ('-R', '-F')]
 
     # Si des arguments positionnels sont fournis
     if len(args) > 0:
@@ -1161,9 +1170,11 @@ def main():
         print(f"Cible: {target_path}")
     if reduce_resolution:
         print("Option -R activée: réduction de résolution d'un cran (4K->1080, 1080->720)")
+    if force_scan:
+        print("Option -F activée: forçage du scan des fichiers/répertoires déjà analysés ou traités")
     print(f"Fichier de log: {log_file}")
     
-    converter = VideoConverter(config_file, log_file, target_path, reduce_resolution)
+    converter = VideoConverter(config_file, log_file, target_path, reduce_resolution, force_scan)
     converter.run()
 
 
