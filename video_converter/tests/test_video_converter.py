@@ -124,6 +124,52 @@ class TestAudioLogic(unittest.TestCase):
         self.assertEqual(to_process, [1])
 
 
+class TestSubtitleMap(unittest.TestCase):
+    def setUp(self):
+        self.converter = vc.VideoConverter.__new__(vc.VideoConverter)
+        self.converter.logger = logging.getLogger('test')
+
+    def test_includes_supported_subtitles(self):
+        streams = [
+            {'index': 0, 'codec': 'subrip', 'language': 'fre'},
+            {'index': 1, 'codec': 'ssa', 'language': 'eng'},
+        ]
+        self.assertEqual(
+            self.converter._build_subtitle_map_cmd(streams),
+            ['-map', '0:s:0', '-map', '0:s:1'],
+        )
+
+    def test_excludes_unknown_codec(self):
+        # Reproduit le bug : flux à codec inconnu -> "no decoder found for: none"
+        streams = [
+            {'index': 0, 'codec': 'subrip', 'language': 'fre'},
+            {'index': 1, 'codec': '', 'language': 'eng'},
+        ]
+        self.assertEqual(
+            self.converter._build_subtitle_map_cmd(streams),
+            ['-map', '0:s:0'],
+        )
+
+    def test_excludes_missing_codec_key(self):
+        streams = [{'index': 0, 'language': 'fre'}]
+        self.assertEqual(self.converter._build_subtitle_map_cmd(streams), [])
+
+    def test_excludes_pgs_and_hdmv_subtitles(self):
+        streams = [
+            {'index': 0, 'codec': 'hdmv_pgs_subtitle', 'language': 'fre'},
+            {'index': 1, 'codec': 'pgssub', 'language': 'eng'},
+            {'index': 2, 'codec': 'subrip', 'language': 'fre'},
+        ]
+        self.assertEqual(
+            self.converter._build_subtitle_map_cmd(streams),
+            ['-map', '0:s:2'],
+        )
+
+    def test_excludes_numeric_codec(self):
+        streams = [{'index': 0, 'codec': '0', 'language': 'fre'}]
+        self.assertEqual(self.converter._build_subtitle_map_cmd(streams), [])
+
+
 @unittest.skipUnless(HAVE_FFMPEG, "ffmpeg/ffprobe requis")
 class TestWithRealVideos(unittest.TestCase):
     def setUp(self):
