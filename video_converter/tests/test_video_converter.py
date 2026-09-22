@@ -206,5 +206,68 @@ class TestWithRealVideos(unittest.TestCase):
             self.converter._run_ffmpeg_with_progress(cmd, vf)
 
 
+@unittest.skipUnless(HAVE_FFMPEG, "ffmpeg/ffprobe requis")
+class TestForceScan(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp(prefix='vc_force_')
+        self.config_file = os.path.join(self.tmpdir, 'test.conf')
+        with open(self.config_file, 'w') as f:
+            json.dump({'directories': [self.tmpdir], 'keep_backup': False}, f)
+        self.log_file = os.path.join(self.tmpdir, 'test.log')
+        logging.getLogger('VideoConverter').addHandler(logging.NullHandler())
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _write_marker(self, marker_name, path):
+        marker_dir = os.path.dirname(self.config_file)
+        with open(os.path.join(marker_dir, marker_name), 'w') as f:
+            f.write(os.path.abspath(path) + '\n')
+
+    def test_converted_marker_skipped_by_default(self):
+        path = os.path.join(self.tmpdir, 'sample.mkv')
+        make_test_video(path)
+        self._write_marker(vc.DEFAULT_CONVERTED_MARKER, path)
+        converter = vc.VideoConverter(self.config_file, self.log_file)
+        converter.load_config()
+        converter.load_markers()
+        files = converter.scan_video_files()
+        self.assertEqual(len(files), 0)
+
+    def test_force_scan_includes_converted_marker(self):
+        path = os.path.join(self.tmpdir, 'sample.mkv')
+        make_test_video(path)
+        self._write_marker(vc.DEFAULT_CONVERTED_MARKER, path)
+        converter = vc.VideoConverter(self.config_file, self.log_file, force_scan=True)
+        converter.load_config()
+        converter.load_markers()
+        files = converter.scan_video_files()
+        self.assertEqual(len(files), 1)
+        self.assertEqual(files[0].path, path)
+
+    def test_force_scan_includes_failed_marker(self):
+        path = os.path.join(self.tmpdir, 'sample.mkv')
+        make_test_video(path)
+        self._write_marker(vc.DEFAULT_FAILED_MARKER, path)
+        converter = vc.VideoConverter(self.config_file, self.log_file, force_scan=True)
+        converter.load_config()
+        converter.load_markers()
+        files = converter.scan_video_files()
+        self.assertEqual(len(files), 1)
+
+    def test_force_scan_with_target_directory(self):
+        subdir = os.path.join(self.tmpdir, 'subdir')
+        os.makedirs(subdir)
+        path = os.path.join(subdir, 'sample.mkv')
+        make_test_video(path)
+        self._write_marker(vc.DEFAULT_CONVERTED_MARKER, path)
+        converter = vc.VideoConverter(self.config_file, self.log_file, target_path=subdir, force_scan=True)
+        converter.load_config()
+        converter.load_markers()
+        files = converter.scan_video_files()
+        self.assertEqual(len(files), 1)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -171,6 +171,12 @@ python3 video_converter.py ma_config.conf
 python3 video_converter.py ma_config.conf /chemin/vers/le/fichier.mkv
 ```
 
+### Options de ligne de commande
+| Option | Description |
+|--------|-------------|
+| `-R` | Réduction de la résolution d'un cran (4K→1080, 1080→720) |
+| `-F` | Forcer le scan même si les fichiers/répertoires passés en arguments ont déjà été analysés ou traités |
+
 ---
 
 ## 🔍 Comportement détaillé
@@ -179,6 +185,7 @@ python3 video_converter.py ma_config.conf /chemin/vers/le/fichier.mkv
 1. Scan récursif des répertoires configurés
 2. Détection des extensions : `.mkv`, `.mp4`, `.avi`
 3. Ignore les fichiers déjà traités (marqueurs `.converted_hevc` et `.failed_conversion`)
+4. L'option `-F` force l'analyse de ces fichiers déjà marqués
 
 ### Analyse des flux
 1. **Vidéo** : détection du codec, résolution, durée
@@ -279,6 +286,10 @@ $ python3 video_converter.py /videos/film_anglais.mkv
 ---
 
 ## 📈 Évolutions récentes
+
+### v1.5.0 - Option -F : forçage du scan
+- **Forçage du scan** : l'option `-F` force l'analyse des fichiers/répertoires déjà marqués comme convertis ou échoués
+- **Position libre** : l'option fonctionne en toute position dans la ligne de commande, comme `-R`
 
 ### v1.4.0 - Gestion audio avancée
 - **Ré-encodage multiple** : Si aucune piste FR, ré-encodage de TOUTES les pistes audio en AAC 128kbps
