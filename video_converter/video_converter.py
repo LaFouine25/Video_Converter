@@ -867,7 +867,9 @@ class VideoConverter:
         # Uniquement pour la vidéo ré-encodée (H.264, ou HEVC/AV1 si -R est actif)
         filter_cmd = []
         if will_reduce_resolution:
-            filter_cmd = ['-vf', f'scale={reduced[0]}:{reduced[1]}']
+            # Largeur cible fixée, hauteur proportionnelle (-2 = arrondie au pair)
+            # pour conserver le ratio d'aspect d'origine (ex. 1920x960 -> 1280x640)
+            filter_cmd = ['-vf', f'scale={reduced[0]}:-2']
 
         cmd = [
             'ffmpeg',
