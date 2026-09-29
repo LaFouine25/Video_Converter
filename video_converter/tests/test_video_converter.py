@@ -78,8 +78,23 @@ class TestResolutionReduction(unittest.TestCase):
             (1280, 720),
         )
 
+    def test_1080p_scope_reduces_to_720p(self):
+        self.assertEqual(
+            self.converter.compute_reduced_resolution(self._video(1920, 960)),
+            (1280, 720),
+        )
+
+    def test_4k_scope_reduces_to_1080p(self):
+        self.assertEqual(
+            self.converter.compute_reduced_resolution(self._video(3840, 1600)),
+            (1920, 1080),
+        )
+
     def test_720p_not_reduced(self):
         self.assertIsNone(self.converter.compute_reduced_resolution(self._video(1280, 720)))
+
+    def test_720p_scope_not_reduced(self):
+        self.assertIsNone(self.converter.compute_reduced_resolution(self._video(1280, 536)))
 
     def test_unknown_resolution_not_reduced(self):
         self.assertIsNone(self.converter.compute_reduced_resolution(self._video(None, None)))

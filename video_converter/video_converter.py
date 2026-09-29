@@ -663,11 +663,16 @@ class VideoConverter:
             self.logger.warning(f"Résolution inconnue pour {video_file.path}, aucune réduction appliquée")
             return None
 
-        # Déterminer le cran actuel à partir de la hauteur (plus robuste que la largeur)
+        # Déterminer le cran actuel à partir de la largeur ou de la hauteur,
+        # avec une tolérance de 10% pour gérer les formats anamorphiques/cinémascope
+        # (ex. 1920x960 = 1080p scope, 3840x1600 = 4K scope)
         current_height = video_file.height
+        current_width = video_file.width
         target = None
         for i, (w, h) in enumerate(RESOLUTION_ORDER):
-            if i < len(RESOLUTION_ORDER) - 1 and current_height >= h:
+            width_match = current_width >= w * 0.9
+            height_match = current_height >= h * 0.9
+            if i < len(RESOLUTION_ORDER) - 1 and (width_match or height_match):
                 target = RESOLUTION_ORDER[i + 1]
                 break
 
@@ -862,7 +867,9 @@ class VideoConverter:
         # Uniquement pour la vidéo ré-encodée (H.264, ou HEVC/AV1 si -R est actif)
         filter_cmd = []
         if will_reduce_resolution:
-            filter_cmd = ['-vf', f'scale={reduced[0]}:{reduced[1]}']
+            # Largeur cible fixée, hauteur proportionnelle (-2 = arrondie au pair)
+            # pour conserver le ratio d'aspect d'origine (ex. 1920x960 -> 1280x640)
+            filter_cmd = ['-vf', f'scale={reduced[0]}:-2']
 
         cmd = [
             'ffmpeg',
